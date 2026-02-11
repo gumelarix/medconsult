@@ -461,6 +461,17 @@ async def start_call(schedule_id: str, request: StartCallRequest, user: dict = D
     if schedule['status'] != ScheduleStatus.ONLINE:
         raise HTTPException(status_code=400, detail="Practice not online")
     
+    # Auto-expire old INVITED sessions (older than 60 seconds)
+    sixty_seconds_ago = (datetime.now(timezone.utc) - timedelta(seconds=60)).isoformat()
+    await db.call_sessions.update_many(
+        {
+            "scheduleId": schedule_id,
+            "status": CallSessionStatus.INVITED,
+            "createdAt": {"$lt": sixty_seconds_ago}
+        },
+        {"$set": {"status": CallSessionStatus.EXPIRED, "endedAt": datetime.now(timezone.utc).isoformat()}}
+    )
+    
     # Check for active call
     active_call = await db.call_sessions.find_one({
         "scheduleId": schedule_id,
