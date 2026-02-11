@@ -6,9 +6,20 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '../components/ui/dialog';
 import { 
   Stethoscope, Calendar, Clock, Users, Play, Square, LogOut, 
-  CheckCircle, AlertCircle, RefreshCw 
+  CheckCircle, AlertCircle, RefreshCw, Plus, Loader2
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -22,6 +33,15 @@ const DoctorDashboard = () => {
   const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
+  
+  // New schedule form state
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newSchedule, setNewSchedule] = useState({
+    date: new Date().toISOString().split('T')[0],
+    startTime: '09:00',
+    endTime: '12:00'
+  });
 
   const fetchSchedules = async () => {
     try {
@@ -42,6 +62,38 @@ const DoctorDashboard = () => {
       fetchSchedules();
     }
   }, [token]);
+
+  const handleCreateSchedule = async () => {
+    if (!newSchedule.date || !newSchedule.startTime || !newSchedule.endTime) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+    
+    if (newSchedule.startTime >= newSchedule.endTime) {
+      toast.error('End time must be after start time');
+      return;
+    }
+    
+    setCreating(true);
+    try {
+      await axios.post(`${API}/doctor/schedules`, newSchedule, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success('Schedule created successfully!');
+      setShowCreateDialog(false);
+      setNewSchedule({
+        date: new Date().toISOString().split('T')[0],
+        startTime: '09:00',
+        endTime: '12:00'
+      });
+      fetchSchedules();
+    } catch (error) {
+      console.error('Failed to create schedule:', error);
+      toast.error(error.response?.data?.detail || 'Failed to create schedule');
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const handleStartPractice = async (scheduleId) => {
     setActionLoading(scheduleId);
