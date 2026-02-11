@@ -329,7 +329,7 @@ const CallRoom = () => {
       off('peer_id_updated', handlePeerIdUpdated);
       off('call_ended', handleCallEnded);
     };
-  }, [callSessionId, isDoctor, on, off]);
+  }, [callSessionId, isDoctor, on, off, cleanupAndNavigate]);
 
   const toggleAudio = () => {
     if (localStreamRef.current) {
@@ -348,29 +348,6 @@ const CallRoom = () => {
         videoTrack.enabled = !videoTrack.enabled;
         setIsVideoEnabled(videoTrack.enabled);
       }
-    }
-  };
-
-  const cleanupAndNavigate = () => {
-    // Clean up media
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => track.stop());
-    }
-    if (callRef.current) {
-      callRef.current.close();
-    }
-    if (peerRef.current) {
-      peerRef.current.destroy();
-    }
-    
-    // Navigate back
-    const session = callSessionRef.current;
-    if (isDoctor && session?.scheduleId) {
-      navigate(`/doctor/practice/${session.scheduleId}`);
-    } else if (isDoctor) {
-      navigate('/doctor/dashboard');
-    } else {
-      navigate('/patient/consultation');
     }
   };
 
