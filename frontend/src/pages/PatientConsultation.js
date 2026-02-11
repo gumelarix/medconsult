@@ -24,6 +24,7 @@ const PatientConsultation = () => {
   const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [invitation, setInvitation] = useState(null);
+  const pollIntervalRef = useRef(null);
 
   const fetchSchedules = useCallback(async () => {
     try {
@@ -39,14 +40,43 @@ const PatientConsultation = () => {
     }
   }, [token]);
 
+  // Poll for pending invitations (fallback for Socket.IO)
+  const checkForInvitation = useCallback(async () => {
+    if (!token || invitation) return;
+    
+    try {
+      const response = await axios.get(`${API}/patient/pending-invitation`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (response.data.hasInvitation) {
+        console.log('Found pending invitation via polling:', response.data);
+        setInvitation(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to check invitation:', error);
+    }
+  }, [token, invitation]);
+
   useEffect(() => {
     fetchSchedules();
-  }, [fetchSchedules]);
+    
+    // Start polling for invitations every 2 seconds
+    pollIntervalRef.current = setInterval(() => {
+      checkForInvitation();
+    }, 2000);
 
-  // Socket event handlers
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, [fetchSchedules, checkForInvitation]);
+
+  // Socket event handlers (backup - polling is primary now)
   useEffect(() => {
     const handleInvitation = (data) => {
-      console.log('Received invitation:', data);
+      console.log('Received invitation via socket:', data);
       setInvitation(data);
     };
 
