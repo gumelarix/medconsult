@@ -972,5 +972,5 @@ app.add_middleware(
 async def shutdown_db_client():
     client.close()
 
-# Export the socket app as the main application
-application = socket_app
+# Mount Socket.IO to FastAPI
+app.mount("/socket.io", socket_app)
