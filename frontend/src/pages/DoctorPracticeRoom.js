@@ -177,6 +177,24 @@ const DoctorPracticeRoom = () => {
     }
   };
 
+  const handleResetPatient = async (patientId) => {
+    setActionLoading(patientId);
+    try {
+      await axios.post(
+        `${API}/doctor/schedules/${scheduleId}/reset-patient/${patientId}`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success('Patient can now rejoin the consultation');
+      fetchScheduleAndQueue();
+    } catch (error) {
+      console.error('Failed to reset patient:', error);
+      toast.error(error.response?.data?.detail || 'Failed to reset patient');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleEndPractice = async () => {
     try {
       await axios.post(`${API}/doctor/schedules/${scheduleId}/end`, {}, {
