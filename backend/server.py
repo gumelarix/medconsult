@@ -972,5 +972,5 @@ app.add_middleware(
 async def shutdown_db_client():
     client.close()
 
-# Mount Socket.IO to FastAPI
-app.mount("/socket.io", socket_app)
+# Mount Socket.IO to FastAPI at /socket.io path
+app.mount("/socket.io", socket_asgi_app)
