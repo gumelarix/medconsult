@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -33,6 +33,7 @@ const PatientScheduleView = () => {
   const [toggling, setToggling] = useState(false);
   const [joining, setJoining] = useState(false);
   const [invitation, setInvitation] = useState(null);
+  const pollIntervalRef = useRef(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -54,9 +55,40 @@ const PatientScheduleView = () => {
     }
   }, [scheduleId, token]);
 
+  // Poll for pending invitations (fallback for Socket.IO)
+  const checkForInvitation = useCallback(async () => {
+    if (!token || invitation) return;
+    
+    try {
+      const response = await axios.get(`${API}/patient/pending-invitation`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (response.data.hasInvitation && response.data.scheduleId === scheduleId) {
+        console.log('Found pending invitation via polling:', response.data);
+        setInvitation(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to check invitation:', error);
+    }
+  }, [token, scheduleId, invitation]);
+
   useEffect(() => {
     fetchData();
     joinSchedule(scheduleId);
+    
+    // Start polling for invitations every 2 seconds when patient is ready
+    pollIntervalRef.current = setInterval(() => {
+      checkForInvitation();
+    }, 2000);
+
+    return () => {
+      leaveSchedule(scheduleId);
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, [scheduleId, fetchData, joinSchedule, leaveSchedule, checkForInvitation]);
 
     return () => {
       leaveSchedule(scheduleId);
