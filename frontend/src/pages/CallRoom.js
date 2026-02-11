@@ -217,6 +217,39 @@ const CallRoom = () => {
     };
   }, []);
 
+  // Poll for call session status to detect if other party ended the call
+  useEffect(() => {
+    if (loading || error || !callSession) return;
+    
+    const checkCallStatus = async () => {
+      try {
+        const response = await axios.get(`${API}/call-sessions/${callSessionId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (response.data.status === 'ENDED') {
+          console.log('Call has been ended by other party');
+          toast.info('Call has ended');
+          cleanupAndNavigate();
+        }
+      } catch (err) {
+        // If we get 404, call session might have been deleted
+        if (err.response?.status === 404) {
+          console.log('Call session not found - may have ended');
+          toast.info('Call has ended');
+          cleanupAndNavigate();
+        }
+      }
+    };
+    
+    // Poll every 3 seconds
+    const pollInterval = setInterval(checkCallStatus, 3000);
+    
+    return () => {
+      clearInterval(pollInterval);
+    };
+  }, [loading, error, callSession, callSessionId, token]);
+
   // Connect to remote peer when their ID is available
   useEffect(() => {
     if (remotePeerId && peerRef.current && localStreamRef.current && !callRef.current) {
