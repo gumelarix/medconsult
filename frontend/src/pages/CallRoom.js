@@ -30,6 +30,7 @@ const CallRoom = () => {
   const [callActive, setCallActive] = useState(false);
   const [localStreamReady, setLocalStreamReady] = useState(false);
   const [mediaInitialized, setMediaInitialized] = useState(false);
+  const [callEnded, setCallEnded] = useState(false);
   
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -40,10 +41,37 @@ const CallRoom = () => {
 
   const isDoctor = user?.role === 'DOCTOR';
 
-  // Store callSession in ref for use in handleEndCall
+  // Store callSession in ref for use in callbacks
   useEffect(() => {
     callSessionRef.current = callSession;
   }, [callSession]);
+
+  // Cleanup and navigate function
+  const cleanupAndNavigate = useCallback(() => {
+    if (callEnded) return; // Prevent multiple calls
+    setCallEnded(true);
+    
+    // Clean up media
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+    }
+    if (callRef.current) {
+      callRef.current.close();
+    }
+    if (peerRef.current) {
+      peerRef.current.destroy();
+    }
+    
+    // Navigate back
+    const session = callSessionRef.current;
+    if (isDoctor && session?.scheduleId) {
+      navigate(`/doctor/practice/${session.scheduleId}`);
+    } else if (isDoctor) {
+      navigate('/doctor/dashboard');
+    } else {
+      navigate('/patient/consultation');
+    }
+  }, [isDoctor, navigate, callEnded]);
 
   // First: Verify call session exists and user has access
   useEffect(() => {
