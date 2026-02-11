@@ -1,34 +1,350 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* Clinical Swiss Design System */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap');
+
+/* Root Variables */
+:root {
+  --primary: #0284C7;
+  --primary-hover: #0369A1;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F1F5F9;
+  --secondary-foreground: #0F172A;
+  --accent: #0EA5E9;
+  --background: #FFFFFF;
+  --background-subtle: #F8FAFC;
+  --background-dark: #0F172A;
+  --text-primary: #0F172A;
+  --text-secondary: #64748B;
+  --text-muted: #94A3B8;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --error: #EF4444;
+  --info: #3B82F6;
+  --border: #E2E8F0;
+  --border-subtle: #F1F5F9;
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-float: 0 8px 30px rgba(0, 0, 0, 0.12);
+  --radius: 0.75rem;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+/* Base Styles */
+* {
+  box-sizing: border-box;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--text-primary);
+  background-color: var(--background-subtle);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-.App-link {
-    color: #61dafb;
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+/* Status Colors */
+.status-online {
+  color: var(--success);
+}
+
+.status-offline {
+  color: var(--text-muted);
+}
+
+.status-waiting {
+  color: var(--warning);
+}
+
+.status-ready {
+  color: var(--success);
+}
+
+.status-in-call {
+  color: var(--info);
+}
+
+.status-done {
+  color: var(--text-muted);
+}
+
+/* Badge Styles */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.badge-online {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+}
+
+.badge-offline {
+  background-color: rgba(148, 163, 184, 0.1);
+  color: var(--text-muted);
+}
+
+.badge-waiting {
+  background-color: rgba(245, 158, 11, 0.1);
+  color: var(--warning);
+}
+
+.badge-ready {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+}
+
+.badge-in-call {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: var(--info);
+}
+
+.badge-upcoming {
+  background-color: rgba(148, 163, 184, 0.1);
+  color: var(--text-secondary);
+}
+
+.badge-completed {
+  background-color: rgba(148, 163, 184, 0.1);
+  color: var(--text-muted);
+}
+
+/* Card Styles */
+.card-medical {
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.2s ease;
+}
+
+.card-medical:hover {
+  box-shadow: var(--shadow-float);
+}
+
+/* Glassmorphism Nav */
+.nav-glass {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+}
+
+/* Pulse Animation for Online Status */
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.05);
+  }
+}
+
+.pulse-online {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Shake Animation for Alerts */
+@keyframes shake-alert {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+.shake-alert {
+  animation: shake-alert 0.6s ease-in-out;
+}
+
+/* Blink Animation */
+@keyframes blink {
+  0%, 50%, 100% { opacity: 1; }
+  25%, 75% { opacity: 0.3; }
+}
+
+.blink-alert {
+  animation: blink 1s ease-in-out infinite;
+}
+
+/* Video Call Styles */
+.video-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--background-dark);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.video-container video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-local {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  width: 200px;
+  height: 150px;
+  border-radius: 0.5rem;
+  border: 2px solid var(--background);
+  box-shadow: var(--shadow-float);
+  overflow: hidden;
+  z-index: 10;
+}
+
+.video-local video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Call Controls */
+.call-controls {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 1rem;
+  z-index: 20;
+}
+
+.call-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 1.25rem;
+}
+
+.call-btn:hover {
+  transform: scale(1.1);
+}
+
+.call-btn-default {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  backdrop-filter: blur(8px);
+}
+
+.call-btn-default:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.call-btn-end {
+  background: var(--error);
+  color: white;
+}
+
+.call-btn-end:hover {
+  background: #DC2626;
+}
+
+.call-btn-active {
+  background: var(--primary);
+  color: white;
+}
+
+/* Invitation Modal Overlay */
+.invitation-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.invitation-modal {
+  background: var(--background);
+  border-radius: 1rem;
+  padding: 2rem;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  box-shadow: var(--shadow-float);
+}
+
+/* Queue Number Circle */
+.queue-number {
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  background: var(--primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+/* Patient Ready Toggle */
+.ready-toggle {
+  transition: all 0.3s ease;
+}
+
+.ready-toggle.active {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .video-local {
+    width: 120px;
+    height: 90px;
+    bottom: 5rem;
+    right: 0.5rem;
+  }
+  
+  .call-controls {
+    bottom: 1rem;
+  }
+  
+  .call-btn {
+    width: 48px;
+    height: 48px;
+    font-size: 1rem;
+  }
+}
+
+/* Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--border-subtle);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
 }
