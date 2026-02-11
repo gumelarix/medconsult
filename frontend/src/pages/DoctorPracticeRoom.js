@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -28,6 +28,7 @@ const DoctorPracticeRoom = () => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
   const [waitingForConfirm, setWaitingForConfirm] = useState(null);
+  const pollIntervalRef = useRef(null);
 
   const fetchScheduleAndQueue = useCallback(async () => {
     try {
@@ -49,16 +50,85 @@ const DoctorPracticeRoom = () => {
     }
   }, [scheduleId, token]);
 
+  // Poll for call session status when waiting for confirmation
+  const checkCallSessionStatus = useCallback(async (callSessionId) => {
+    if (!callSessionId || !token) return;
+    
+    try {
+      const response = await axios.get(`${API}/doctor/call-sessions/${callSessionId}/status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const { status } = response.data;
+      console.log('Call session status:', status);
+      
+      if (status === 'CONFIRMED' || status === 'ACTIVE') {
+        toast.success('Patient confirmed! Joining call room...');
+        setWaitingForConfirm(null);
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+        navigate(`/call/${callSessionId}`);
+      } else if (status === 'DECLINED') {
+        toast.warning('Patient declined the call');
+        setWaitingForConfirm(null);
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+        fetchScheduleAndQueue();
+      } else if (status === 'EXPIRED' || status === 'ENDED') {
+        toast.info('Call invitation expired');
+        setWaitingForConfirm(null);
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+        fetchScheduleAndQueue();
+      }
+    } catch (error) {
+      console.error('Failed to check call status:', error);
+    }
+  }, [token, navigate, fetchScheduleAndQueue]);
+
   useEffect(() => {
     fetchScheduleAndQueue();
     joinSchedule(scheduleId);
 
     return () => {
       leaveSchedule(scheduleId);
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
     };
   }, [scheduleId, fetchScheduleAndQueue, joinSchedule, leaveSchedule]);
 
-  // Socket event handlers
+  // Start polling when waiting for confirmation
+  useEffect(() => {
+    if (waitingForConfirm) {
+      // Poll every 1.5 seconds
+      pollIntervalRef.current = setInterval(() => {
+        checkCallSessionStatus(waitingForConfirm);
+      }, 1500);
+      
+      // Also check immediately
+      checkCallSessionStatus(waitingForConfirm);
+    } else {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    }
+    
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, [waitingForConfirm, checkCallSessionStatus]);
+
+  // Socket event handlers (backup - polling is primary now)
   useEffect(() => {
     const handleQueueUpdate = (data) => {
       if (data.scheduleId === scheduleId) {
