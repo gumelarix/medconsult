@@ -28,14 +28,21 @@ const CallRoom = () => {
   const [isConnecting, setIsConnecting] = useState(true);
   const [remotePeerId, setRemotePeerId] = useState(null);
   const [callActive, setCallActive] = useState(false);
+  const [localStreamReady, setLocalStreamReady] = useState(false);
   
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const peerRef = useRef(null);
   const localStreamRef = useRef(null);
   const callRef = useRef(null);
+  const callSessionRef = useRef(null);
 
   const isDoctor = user?.role === 'DOCTOR';
+
+  // Store callSession in ref for use in handleEndCall
+  useEffect(() => {
+    callSessionRef.current = callSession;
+  }, [callSession]);
 
   const fetchCallSession = useCallback(async () => {
     try {
@@ -43,6 +50,7 @@ const CallRoom = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCallSession(response.data);
+      callSessionRef.current = response.data;
       
       // Activate call if confirmed
       if (response.data.status === 'CONFIRMED') {
@@ -85,8 +93,11 @@ const CallRoom = () => {
         }
         
         localStreamRef.current = stream;
+        
+        // Set local video immediately
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
+          setLocalStreamReady(true);
         }
         
         // Initialize PeerJS
@@ -101,9 +112,13 @@ const CallRoom = () => {
             ? `${API}/doctor/call-sessions/${callSessionId}/set-peer-id`
             : `${API}/patient/call-sessions/${callSessionId}/set-peer-id`;
           
-          await axios.post(endpoint, { peerId: id }, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
+          try {
+            await axios.post(endpoint, { peerId: id }, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+          } catch (err) {
+            console.error('Failed to set peer ID:', err);
+          }
           
           // Fetch call session to get remote peer ID
           await fetchCallSession();
@@ -141,7 +156,7 @@ const CallRoom = () => {
         if (err.name === 'NotAllowedError') {
           setError('Camera and microphone access is required for video calls.');
         } else {
-          setError('Failed to initialize video call.');
+          setError('Failed to initialize video call. Please check camera permissions.');
         }
       }
     };
@@ -197,7 +212,7 @@ const CallRoom = () => {
     const handleCallEnded = (data) => {
       if (data.callSessionId === callSessionId) {
         toast.info('Call has ended');
-        handleEndCall(false);
+        cleanupAndNavigate(false);
       }
     };
     
@@ -230,22 +245,8 @@ const CallRoom = () => {
     }
   };
 
-  const handleEndCall = async (sendRequest = true) => {
-    if (sendRequest) {
-      try {
-        const endpoint = isDoctor 
-          ? `${API}/doctor/call-sessions/${callSessionId}/end`
-          : `${API}/patient/call-sessions/${callSessionId}/end`;
-        
-        await axios.post(endpoint, {}, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-      } catch (err) {
-        console.error('Failed to end call:', err);
-      }
-    }
-    
-    // Clean up
+  const cleanupAndNavigate = (sendRequest) => {
+    // Clean up media
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => track.stop());
     }
@@ -257,11 +258,32 @@ const CallRoom = () => {
     }
     
     // Navigate back
-    if (isDoctor) {
-      navigate(`/doctor/practice/${callSession?.scheduleId || ''}`);
+    const session = callSessionRef.current;
+    if (isDoctor && session?.scheduleId) {
+      navigate(`/doctor/practice/${session.scheduleId}`);
+    } else if (isDoctor) {
+      navigate('/doctor/dashboard');
     } else {
       navigate('/patient/consultation');
     }
+  };
+
+  const handleEndCall = async () => {
+    try {
+      const endpoint = isDoctor 
+        ? `${API}/doctor/call-sessions/${callSessionId}/end`
+        : `${API}/patient/call-sessions/${callSessionId}/end`;
+      
+      await axios.post(endpoint, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success('Call ended');
+    } catch (err) {
+      console.error('Failed to end call:', err);
+      toast.error('Failed to end call properly');
+    }
+    
+    cleanupAndNavigate(true);
   };
 
   if (loading) {
@@ -296,7 +318,7 @@ const CallRoom = () => {
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col">
       {/* Call Info Header */}
-      <div className="bg-slate-800/50 backdrop-blur-sm px-4 py-3">
+      <div className="bg-slate-800/50 backdrop-blur-sm px-4 py-3 flex-shrink-0">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-sky-500/20 flex items-center justify-center">
@@ -316,9 +338,9 @@ const CallRoom = () => {
       </div>
 
       {/* Video Container */}
-      <div className="flex-1 relative">
+      <div className="flex-1 relative min-h-0">
         {/* Remote Video (Full Screen) */}
-        <div className="absolute inset-0">
+        <div className="absolute inset-0 bg-slate-800">
           <video
             ref={remoteVideoRef}
             autoPlay
@@ -341,13 +363,17 @@ const CallRoom = () => {
         </div>
         
         {/* Local Video (Picture-in-Picture) */}
-        <div className="video-local">
+        <div 
+          className="absolute bottom-24 right-4 w-48 h-36 rounded-lg border-2 border-white shadow-xl overflow-hidden z-10 bg-slate-700"
+          style={{ minWidth: '180px', minHeight: '135px' }}
+        >
           <video
             ref={localVideoRef}
             autoPlay
             playsInline
             muted
             className="w-full h-full object-cover"
+            style={{ transform: 'scaleX(-1)' }}
             data-testid="local-video"
           />
           {!isVideoEnabled && (
@@ -355,32 +381,45 @@ const CallRoom = () => {
               <VideoOff className="w-8 h-8 text-slate-500" />
             </div>
           )}
+          {!localStreamReady && (
+            <div className="absolute inset-0 bg-slate-800 flex items-center justify-center">
+              <Loader2 className="w-6 h-6 text-slate-400 animate-spin" />
+            </div>
+          )}
         </div>
         
         {/* Call Controls */}
-        <div className="call-controls">
+        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-4 z-20">
           <button
             onClick={toggleAudio}
-            className={`call-btn ${isAudioEnabled ? 'call-btn-default' : 'call-btn-active'}`}
+            className={`w-14 h-14 rounded-full flex items-center justify-center transition-all hover:scale-110 ${
+              isAudioEnabled 
+                ? 'bg-white/20 text-white backdrop-blur-sm' 
+                : 'bg-sky-500 text-white'
+            }`}
             data-testid="toggle-audio"
           >
-            {isAudioEnabled ? <Mic /> : <MicOff />}
+            {isAudioEnabled ? <Mic className="w-6 h-6" /> : <MicOff className="w-6 h-6" />}
           </button>
           
           <button
             onClick={toggleVideo}
-            className={`call-btn ${isVideoEnabled ? 'call-btn-default' : 'call-btn-active'}`}
+            className={`w-14 h-14 rounded-full flex items-center justify-center transition-all hover:scale-110 ${
+              isVideoEnabled 
+                ? 'bg-white/20 text-white backdrop-blur-sm' 
+                : 'bg-sky-500 text-white'
+            }`}
             data-testid="toggle-video"
           >
-            {isVideoEnabled ? <Video /> : <VideoOff />}
+            {isVideoEnabled ? <Video className="w-6 h-6" /> : <VideoOff className="w-6 h-6" />}
           </button>
           
           <button
-            onClick={() => handleEndCall(true)}
-            className="call-btn call-btn-end"
+            onClick={handleEndCall}
+            className="w-14 h-14 rounded-full bg-red-500 text-white flex items-center justify-center transition-all hover:scale-110 hover:bg-red-600"
             data-testid="end-call"
           >
-            <PhoneOff />
+            <PhoneOff className="w-6 h-6" />
           </button>
         </div>
       </div>
