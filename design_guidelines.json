@@ -1,0 +1,170 @@
+{
+  "design_system": {
+    "identity": {
+      "name": "Clinical Swiss",
+      "core_concept": "Trust through Clarity. A sterile but human interface that reduces anxiety through precision and calm.",
+      "emotional_tone": "Professional, Reassuring, Efficient, Clean",
+      "archetype": "Archetype 4: Swiss & High-Contrast (Modified for Medical)"
+    },
+    "typography": {
+      "font_family": {
+        "headings": "Plus Jakarta Sans, sans-serif",
+        "body": "Inter, sans-serif",
+        "mono": "JetBrains Mono, monospace"
+      },
+      "scale": {
+        "h1": "text-4xl md:text-5xl font-bold tracking-tight",
+        "h2": "text-3xl md:text-4xl font-semibold tracking-tight",
+        "h3": "text-2xl font-semibold",
+        "body_lg": "text-lg leading-relaxed",
+        "body_base": "text-base leading-relaxed text-slate-600",
+        "caption": "text-sm font-medium text-slate-500 uppercase tracking-wider"
+      },
+      "imports": [
+        "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap');"
+      ]
+    },
+    "colors": {
+      "palette": {
+        "primary": {
+          "DEFAULT": "#0284C7",
+          "foreground": "#FFFFFF",
+          "hover": "#0369A1",
+          "description": "Medical Sky Blue - Friendly but professional. Use for primary actions."
+        },
+        "secondary": {
+          "DEFAULT": "#F1F5F9",
+          "foreground": "#0F172A",
+          "description": "Slate 100 - Use for secondary buttons and backgrounds."
+        },
+        "accent": {
+          "DEFAULT": "#0EA5E9",
+          "foreground": "#FFFFFF"
+        },
+        "background": {
+          "DEFAULT": "#FFFFFF",
+          "subtle": "#F8FAFC",
+          "dark": "#0F172A"
+        },
+        "status": {
+          "success": "#10B981",
+          "warning": "#F59E0B",
+          "error": "#EF4444",
+          "info": "#3B82F6"
+        }
+      },
+      "gradients": {
+        "hero": "bg-gradient-to-b from-slate-50 to-white",
+        "brand": "bg-gradient-to-r from-sky-500 to-blue-600",
+        "subtle_glow": "bg-gradient-to-tr from-sky-50 via-white to-slate-50"
+      }
+    },
+    "visual_enhancers": {
+      "radius": "rounded-lg",
+      "shadows": {
+        "card": "shadow-[0_2px_8px_rgba(0,0,0,0.04)]",
+        "float": "shadow-[0_8px_30px_rgba(0,0,0,0.12)]",
+        "inner": "shadow-inner"
+      },
+      "borders": {
+        "default": "border border-slate-200",
+        "subtle": "border border-slate-100"
+      },
+      "glassmorphism": {
+        "nav": "bg-white/80 backdrop-blur-md border-b border-slate-200/50",
+        "overlay": "bg-slate-900/20 backdrop-blur-sm"
+      }
+    },
+    "layout_strategies": {
+      "spacing": {
+        "container_padding": "p-6 md:p-8 lg:p-12",
+        "section_gap": "gap-8 md:gap-12",
+        "component_gap": "gap-4"
+      },
+      "grids": {
+        "dashboard": "grid grid-cols-1 md:grid-cols-12 gap-6",
+        "bento_card": "bg-white rounded-xl border border-slate-200 p-6 shadow-sm"
+      }
+    },
+    "motion": {
+      "library": "framer-motion",
+      "animations": {
+        "fade_in": {
+          "initial": { "opacity": 0, "y": 10 },
+          "animate": { "opacity": 1, "y": 0 },
+          "transition": { "duration": 0.4 }
+        },
+        "pulse_slow": {
+          "animate": { "scale": [1, 1.02, 1], "opacity": [1, 0.8, 1] },
+          "transition": { "duration": 2, "repeat": "Infinity" }
+        },
+        "shake_alert": {
+          "animate": { "x": [-2, 2, -2, 2, 0] },
+          "transition": { "duration": 0.4 }
+        }
+      }
+    },
+    "components": {
+      "buttons": {
+        "primary": "bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 rounded-md font-medium transition-colors",
+        "secondary": "bg-secondary text-secondary-foreground hover:bg-secondary/80 h-10 px-4 py-2 rounded-md font-medium transition-colors",
+        "destructive": "bg-destructive text-destructive-foreground hover:bg-destructive/90 h-10 px-4 py-2 rounded-md font-medium transition-colors",
+        "ghost": "hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 rounded-md font-medium transition-colors"
+      },
+      "cards": {
+        "base": "rounded-xl border border-slate-200 bg-white text-slate-950 shadow-sm",
+        "interactive": "hover:shadow-md transition-shadow cursor-pointer"
+      },
+      "inputs": {
+        "base": "flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+      }
+    },
+    "media": {
+      "image_urls": {
+        "hero_bg": "https://images.unsplash.com/photo-1746439304284-6b20c765f460?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "login_bg": "https://images.unsplash.com/photo-1764727291644-5dcb0b1a0375?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "doctor_avatars": [
+          "https://images.unsplash.com/photo-1758691463393-a2aa9900af8a?crop=entropy&cs=srgb&fm=jpg&q=85",
+          "https://images.unsplash.com/photo-1758691461516-7e716e0ca135?crop=entropy&cs=srgb&fm=jpg&q=85",
+          "https://images.unsplash.com/photo-1758691461513-88a0aef72160?crop=entropy&cs=srgb&fm=jpg&q=85"
+        ],
+        "patient_avatars": [
+          "https://images.unsplash.com/photo-1755189118414-14c8dacdb082?crop=entropy&cs=srgb&fm=jpg&q=85"
+        ],
+        "abstract_bg": "https://images.unsplash.com/photo-1759270463243-414a287681be?crop=entropy&cs=srgb&fm=jpg&q=85"
+      },
+      "audio": {
+        "notification_chime": "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"
+      }
+    },
+    "accessibility": {
+      "rules": [
+        "Ensure 4.5:1 contrast ratio for normal text.",
+        "Use semantic HTML (main, section, article).",
+        "All interactive elements must have :focus-visible styles.",
+        "Use aria-live='polite' for queue status updates.",
+        "Use aria-live='assertive' for invitation alerts."
+      ]
+    },
+    "instructions_to_main_agent": {
+      "general": "Follow the 'Clinical Swiss' identity. Prioritize clarity and trust. Do not use gradients for text. Use the provided image URLs for placeholders.",
+      "layout": "Use the 'Bento' grid for the Doctor Dashboard. Use a focused, single-card layout for the Patient Consultation view.",
+      "real_time": "Implement Socket.IO for real-time queue updates and call invitations. Ensure the 'Loud' notification triggers the audio chime.",
+      "video": "Use PeerJS for WebRTC. Ensure the video container handles aspect ratios correctly (cover vs contain).",
+      "packages": "Install 'framer-motion' for animations. Install 'socket.io-client' and 'peerjs' if not present."
+    },
+    "universal_guidelines": {
+      "do_not": [
+        "Do not use generic 'Bootstrap' styles.",
+        "Do not use 'Inter' for headings (use Plus Jakarta Sans).",
+        "Do not use dark mode by default (Medical = Light/Clean).",
+        "Do not clutter the video call interface."
+      ],
+      "must_do": [
+        "Use 'sonner' for toast notifications.",
+        "Use 'data-testid' for all interactive elements.",
+        "Ensure mobile responsiveness for all views."
+      ]
+    }
+  }
+}
