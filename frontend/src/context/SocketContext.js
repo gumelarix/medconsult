@@ -35,7 +35,7 @@ export const SocketProvider = ({ children }) => {
     // Connect to Socket.IO at /socket.io path
     const socketUrl = BACKEND_URL;
     const newSocket = io(socketUrl, {
-      path: '/socket.io/socket.io',
+      path: '/socket.io',
       transports: ['polling', 'websocket'],
       autoConnect: true,
       reconnection: true,
