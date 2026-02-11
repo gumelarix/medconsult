@@ -398,11 +398,28 @@ const DoctorPracticeRoom = () => {
                             Start
                           </Button>
                         )}
-                        {entry.status === 'DONE' && (
-                          <span className="text-slate-500 flex items-center gap-1">
-                            <CheckCircle className="w-4 h-4" />
-                            Completed
-                          </span>
+                        {entry.status === 'DONE' && !waitingForConfirm && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-500 flex items-center gap-1">
+                              <CheckCircle className="w-4 h-4" />
+                              Completed
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-sky-600 border-sky-200 hover:bg-sky-50"
+                              onClick={() => handleResetPatient(entry.patientId)}
+                              disabled={actionLoading === entry.patientId}
+                              data-testid={`call-again-${entry.patientId}`}
+                            >
+                              {actionLoading === entry.patientId ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              ) : (
+                                <RefreshCw className="w-4 h-4 mr-2" />
+                              )}
+                              Call Again
+                            </Button>
+                          </div>
                         )}
                         {entry.status === 'IN_CALL' && (
                           <span className="text-blue-600 flex items-center gap-1">
