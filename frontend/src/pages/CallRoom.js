@@ -46,17 +46,25 @@ const CallRoom = () => {
 
   const fetchCallSession = useCallback(async () => {
     try {
+      console.log('Fetching call session:', callSessionId);
       const response = await axios.get(`${API}/call-sessions/${callSessionId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      console.log('Call session data:', response.data);
       setCallSession(response.data);
       callSessionRef.current = response.data;
       
       // Activate call if confirmed
       if (response.data.status === 'CONFIRMED') {
-        await axios.post(`${API}/call-sessions/${callSessionId}/activate`, {}, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        try {
+          await axios.post(`${API}/call-sessions/${callSessionId}/activate`, {}, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          console.log('Call activated');
+        } catch (activateErr) {
+          // Ignore activation errors - call might already be active
+          console.log('Activation error (may be ok):', activateErr.response?.data);
+        }
       }
       
       // Set remote peer ID based on role
@@ -69,7 +77,9 @@ const CallRoom = () => {
       return response.data;
     } catch (err) {
       console.error('Failed to fetch call session:', err);
+      console.error('Error response:', err.response?.data);
       setError('Unable to join call. Access denied or call not found.');
+      return null;
     } finally {
       setLoading(false);
     }
