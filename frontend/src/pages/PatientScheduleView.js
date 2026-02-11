@@ -1,0 +1,412 @@
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
+import { toast } from 'sonner';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
+import { Switch } from '../components/ui/switch';
+import { Label } from '../components/ui/label';
+import { 
+  Stethoscope, Calendar, Clock, Users, ArrowLeft, 
+  CheckCircle, AlertCircle, RefreshCw, UserCircle, Volume2,
+  Radio, Loader2
+} from 'lucide-react';
+import axios from 'axios';
+import InvitationModal from '../components/InvitationModal';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
+
+const PatientScheduleView = () => {
+  const { scheduleId } = useParams();
+  const navigate = useNavigate();
+  const { user, token } = useAuth();
+  const { connected, joinSchedule, leaveSchedule, on, off } = useSocket();
+  
+  const [schedule, setSchedule] = useState(null);
+  const [queueEntry, setQueueEntry] = useState(null);
+  const [totalInQueue, setTotalInQueue] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [isReady, setIsReady] = useState(false);
+  const [toggling, setToggling] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [invitation, setInvitation] = useState(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API}/patient/schedules/${scheduleId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSchedule(response.data.schedule);
+      setQueueEntry(response.data.queueEntry);
+      setTotalInQueue(response.data.totalInQueue);
+      
+      if (response.data.queueEntry) {
+        setIsReady(response.data.queueEntry.status === 'READY');
+      }
+    } catch (error) {
+      console.error('Failed to fetch data:', error);
+      toast.error('Failed to load consultation details');
+    } finally {
+      setLoading(false);
+    }
+  }, [scheduleId, token]);
+
+  useEffect(() => {
+    fetchData();
+    joinSchedule(scheduleId);
+
+    return () => {
+      leaveSchedule(scheduleId);
+    };
+  }, [scheduleId, fetchData, joinSchedule, leaveSchedule]);
+
+  // Socket event handlers
+  useEffect(() => {
+    const handleScheduleStatusChanged = (data) => {
+      if (data.scheduleId === scheduleId) {
+        fetchData();
+        if (data.status === 'ONLINE') {
+          toast.success('Doctor is now online! You can set yourself as Ready.');
+        } else if (data.status === 'COMPLETED') {
+          toast.info('Practice session has ended.');
+        }
+      }
+    };
+
+    const handleQueueUpdated = (data) => {
+      if (data.scheduleId === scheduleId) {
+        fetchData();
+      }
+    };
+
+    const handleInvitation = (data) => {
+      console.log('Received invitation:', data);
+      if (data.scheduleId === scheduleId) {
+        setInvitation(data);
+      }
+    };
+
+    on('schedule_status_changed', handleScheduleStatusChanged);
+    on('queue_updated', handleQueueUpdated);
+    on('call_invitation', handleInvitation);
+
+    return () => {
+      off('schedule_status_changed', handleScheduleStatusChanged);
+      off('queue_updated', handleQueueUpdated);
+      off('call_invitation', handleInvitation);
+    };
+  }, [scheduleId, on, off, fetchData]);
+
+  const handleJoinQueue = async () => {
+    setJoining(true);
+    try {
+      await axios.post(
+        `${API}/patient/schedules/${scheduleId}/join-queue`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success('Successfully joined the queue!');
+      fetchData();
+    } catch (error) {
+      console.error('Failed to join queue:', error);
+      toast.error(error.response?.data?.detail || 'Failed to join queue');
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  const handleToggleReady = async (checked) => {
+    setToggling(true);
+    try {
+      await axios.post(
+        `${API}/patient/schedules/${scheduleId}/toggle-ready`,
+        { isReady: checked },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setIsReady(checked);
+      if (checked) {
+        toast.success('You are now READY! The doctor can start your consultation.');
+      } else {
+        toast.info('You are now NOT READY. Toggle back when you\'re available.');
+      }
+      fetchData();
+    } catch (error) {
+      console.error('Failed to toggle ready:', error);
+      toast.error(error.response?.data?.detail || 'Failed to update status');
+    } finally {
+      setToggling(false);
+    }
+  };
+
+  const handleConfirmCall = async () => {
+    if (!invitation) return;
+    
+    try {
+      await axios.post(
+        `${API}/patient/call-sessions/${invitation.callSessionId}/confirm`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success('Call confirmed! Joining...');
+      setInvitation(null);
+      navigate(`/call/${invitation.callSessionId}`);
+    } catch (error) {
+      console.error('Failed to confirm call:', error);
+      toast.error(error.response?.data?.detail || 'Failed to confirm call');
+    }
+  };
+
+  const handleDeclineCall = async () => {
+    if (!invitation) return;
+    
+    try {
+      await axios.post(
+        `${API}/patient/call-sessions/${invitation.callSessionId}/decline`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.info('Call declined');
+      setInvitation(null);
+      fetchData();
+    } catch (error) {
+      console.error('Failed to decline call:', error);
+      toast.error(error.response?.data?.detail || 'Failed to decline call');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-sky-500/20" />
+          <p className="text-slate-500">Loading consultation...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!schedule) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Card className="max-w-md w-full mx-4">
+          <CardContent className="pt-6 text-center">
+            <AlertCircle className="w-12 h-12 mx-auto text-amber-500 mb-4" />
+            <h3 className="text-lg font-semibold text-slate-700">Schedule Not Found</h3>
+            <p className="text-slate-500 mt-2">This consultation schedule doesn't exist.</p>
+            <Button 
+              className="mt-4"
+              onClick={() => navigate('/patient/consultation')}
+              data-testid="back-btn"
+            >
+              Back to Consultations
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      {/* Invitation Modal */}
+      {invitation && (
+        <InvitationModal
+          doctorName={invitation.doctorName}
+          onConfirm={handleConfirmCall}
+          onDecline={handleDeclineCall}
+        />
+      )}
+
+      {/* Navigation */}
+      <nav className="nav-glass sticky top-0 z-40">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => navigate('/patient/consultation')}
+              data-testid="back-btn"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back
+            </Button>
+            
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+              <span className="text-sm text-slate-600">{connected ? 'Live' : 'Connecting...'}</span>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Doctor Card */}
+        <Card className={`mb-6 ${schedule.status === 'ONLINE' ? 'ring-2 ring-emerald-500 ring-offset-2' : ''}`}>
+          <CardContent className="py-6">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-sky-100 flex items-center justify-center">
+                <UserCircle className="w-10 h-10 text-sky-600" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-xl font-bold text-slate-900" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                  {schedule.doctorName}
+                </h2>
+                <p className="text-slate-600">General Practitioner</p>
+                <div className="flex items-center gap-4 mt-2">
+                  <span className="text-sm text-slate-500 flex items-center gap-1">
+                    <Calendar className="w-4 h-4" />
+                    {schedule.date}
+                  </span>
+                  <span className="text-sm text-slate-500 flex items-center gap-1">
+                    <Clock className="w-4 h-4" />
+                    {schedule.startTime} - {schedule.endTime}
+                  </span>
+                </div>
+              </div>
+              <div>
+                {schedule.status === 'ONLINE' ? (
+                  <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 flex items-center gap-1 text-sm px-3 py-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Online
+                  </Badge>
+                ) : schedule.status === 'COMPLETED' ? (
+                  <Badge className="bg-slate-100 text-slate-600 border-slate-200">Completed</Badge>
+                ) : (
+                  <Badge className="bg-amber-100 text-amber-700 border-amber-200">Upcoming</Badge>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Queue Status */}
+        {!queueEntry ? (
+          <Card>
+            <CardContent className="py-8 text-center">
+              <Users className="w-12 h-12 mx-auto text-slate-400 mb-4" />
+              <h3 className="text-lg font-semibold text-slate-700">Join the Queue</h3>
+              <p className="text-slate-500 mt-2 mb-4">
+                {totalInQueue > 0 
+                  ? `${totalInQueue} patient(s) currently in queue` 
+                  : 'Be the first to join the queue'}
+              </p>
+              <Button 
+                className="bg-sky-500 hover:bg-sky-600"
+                onClick={handleJoinQueue}
+                disabled={joining || schedule.status === 'COMPLETED'}
+                data-testid="join-queue-btn"
+              >
+                {joining ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Users className="w-4 h-4 mr-2" />
+                )}
+                Join Queue
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Queue Position Card */}
+            <Card className="mb-6 bg-gradient-to-r from-sky-50 to-white border-sky-100">
+              <CardContent className="py-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-sky-600 font-medium">Your Queue Number</p>
+                    <p className="text-5xl font-bold text-sky-500 mt-1" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                      #{queueEntry.queueNumber}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-slate-500">Total in Queue</p>
+                    <p className="text-2xl font-semibold text-slate-700">{totalInQueue}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Ready Toggle Card */}
+            <Card className={`mb-6 transition-all ${isReady ? 'ring-2 ring-emerald-500' : ''}`}>
+              <CardContent className="py-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                      isReady ? 'bg-emerald-100' : 'bg-slate-100'
+                    }`}>
+                      {isReady ? (
+                        <CheckCircle className="w-6 h-6 text-emerald-600" />
+                      ) : (
+                        <Radio className="w-6 h-6 text-slate-400" />
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-slate-900">
+                        {isReady ? "You're Ready!" : "Set Yourself as Ready"}
+                      </h3>
+                      <p className="text-sm text-slate-500">
+                        {isReady 
+                          ? "The doctor can now start your consultation" 
+                          : "Toggle to let the doctor know you're available"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Label htmlFor="ready-toggle" className={`text-sm font-medium ${isReady ? 'text-emerald-600' : 'text-slate-500'}`}>
+                      {isReady ? 'READY' : 'NOT READY'}
+                    </Label>
+                    <Switch
+                      id="ready-toggle"
+                      checked={isReady}
+                      onCheckedChange={handleToggleReady}
+                      disabled={toggling || queueEntry.status === 'DONE' || queueEntry.status === 'IN_CALL' || schedule.status !== 'ONLINE'}
+                      data-testid="ready-toggle"
+                    />
+                  </div>
+                </div>
+                
+                {queueEntry.status === 'DONE' && (
+                  <div className="mt-4 p-3 bg-slate-50 rounded-lg">
+                    <p className="text-sm text-slate-600 flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-emerald-500" />
+                      Your consultation has been completed
+                    </p>
+                  </div>
+                )}
+                
+                {schedule.status !== 'ONLINE' && queueEntry.status !== 'DONE' && (
+                  <div className="mt-4 p-3 bg-amber-50 rounded-lg">
+                    <p className="text-sm text-amber-700 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" />
+                      Waiting for doctor to start the practice session
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Sound Alert Notice */}
+            <Card className="bg-amber-50 border-amber-200">
+              <CardContent className="py-4">
+                <div className="flex items-center gap-3">
+                  <Volume2 className="w-5 h-5 text-amber-600" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-800">Keep Your Volume On</p>
+                    <p className="text-xs text-amber-600">
+                      You'll receive a loud notification when the doctor is ready to see you.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
+      </main>
+    </div>
+  );
+};
+
+export default PatientScheduleView;
