@@ -605,6 +605,48 @@ async def get_call_session_status(call_session_id: str, user: dict = Depends(req
         "scheduleId": session['scheduleId']
     }
 
+@api_router.post("/doctor/schedules/{schedule_id}/reset-patient/{patient_id}")
+async def reset_patient_for_rejoin(schedule_id: str, patient_id: str, user: dict = Depends(require_doctor)):
+    """Reset a patient's status to READY so they can rejoin the consultation"""
+    schedule = await db.schedules.find_one({"id": schedule_id, "doctorId": user['id']}, {"_id": 0})
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    
+    if schedule['status'] != ScheduleStatus.ONLINE:
+        raise HTTPException(status_code=400, detail="Practice not online")
+    
+    # Check patient is in queue
+    queue_entry = await db.queue_entries.find_one({
+        "scheduleId": schedule_id,
+        "patientId": patient_id
+    }, {"_id": 0})
+    
+    if not queue_entry:
+        raise HTTPException(status_code=404, detail="Patient not in queue")
+    
+    if queue_entry['status'] not in [QueueStatus.DONE, QueueStatus.WAITING]:
+        raise HTTPException(status_code=400, detail=f"Cannot reset patient in status: {queue_entry['status']}")
+    
+    # Reset patient to READY
+    await db.queue_entries.update_one(
+        {"scheduleId": schedule_id, "patientId": patient_id},
+        {"$set": {"status": QueueStatus.READY, "isReady": True}}
+    )
+    
+    await log_audit(user['id'], "PATIENT_RESET_FOR_REJOIN", schedule_id=schedule_id, 
+                   patient_id=patient_id, metadata={"previousStatus": queue_entry['status']})
+    
+    # Notify schedule room
+    await emit_to_schedule(schedule_id, "queue_updated", {"scheduleId": schedule_id})
+    
+    # Notify the patient
+    await emit_to_user(patient_id, "status_reset", {
+        "scheduleId": schedule_id,
+        "message": "Doctor has enabled you to rejoin the consultation"
+    })
+    
+    return {"message": "Patient reset for rejoin", "status": QueueStatus.READY}
+
 # ==================== PATIENT ROUTES ====================
 
 @api_router.get("/patient/schedules", response_model=List[DoctorScheduleResponse])
