@@ -188,10 +188,90 @@ const DoctorDashboard = () => {
             </h2>
             <p className="text-slate-600 mt-1">Manage your consultation schedules</p>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchSchedules} data-testid="refresh-schedules">
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={fetchSchedules} data-testid="refresh-schedules">
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Refresh
+            </Button>
+            
+            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+              <DialogTrigger asChild>
+                <Button className="bg-sky-500 hover:bg-sky-600" data-testid="create-schedule-btn">
+                  <Plus className="w-4 h-4 mr-2" />
+                  New Schedule
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                    Create New Schedule
+                  </DialogTitle>
+                  <DialogDescription>
+                    Add a new consultation schedule for patients to book.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="schedule-date">Date</Label>
+                    <Input
+                      id="schedule-date"
+                      type="date"
+                      value={newSchedule.date}
+                      onChange={(e) => setNewSchedule({ ...newSchedule, date: e.target.value })}
+                      min={new Date().toISOString().split('T')[0]}
+                      data-testid="schedule-date-input"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="start-time">Start Time</Label>
+                      <Input
+                        id="start-time"
+                        type="time"
+                        value={newSchedule.startTime}
+                        onChange={(e) => setNewSchedule({ ...newSchedule, startTime: e.target.value })}
+                        data-testid="schedule-start-time-input"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="end-time">End Time</Label>
+                      <Input
+                        id="end-time"
+                        type="time"
+                        value={newSchedule.endTime}
+                        onChange={(e) => setNewSchedule({ ...newSchedule, endTime: e.target.value })}
+                        data-testid="schedule-end-time-input"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowCreateDialog(false)}
+                    data-testid="cancel-schedule-btn"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleCreateSchedule} 
+                    disabled={creating}
+                    className="bg-sky-500 hover:bg-sky-600"
+                    data-testid="save-schedule-btn"
+                  >
+                    {creating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      'Create Schedule'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         {/* Schedules Grid */}
