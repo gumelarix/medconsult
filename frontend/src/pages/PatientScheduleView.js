@@ -90,11 +90,6 @@ const PatientScheduleView = () => {
     };
   }, [scheduleId, fetchData, joinSchedule, leaveSchedule, checkForInvitation]);
 
-    return () => {
-      leaveSchedule(scheduleId);
-    };
-  }, [scheduleId, fetchData, joinSchedule, leaveSchedule]);
-
   // Socket event handlers (backup - polling is primary now)
   useEffect(() => {
     const handleScheduleStatusChanged = (data) => {
