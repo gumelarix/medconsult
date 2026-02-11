@@ -30,19 +30,19 @@ JWT_EXPIRATION_HOURS = 24
 # Security
 security = HTTPBearer()
 
+# Create FastAPI app
+app = FastAPI()
+
 # Create Socket.IO server
 sio = socketio.AsyncServer(
     async_mode='asgi',
     cors_allowed_origins='*',
-    logger=True,
-    engineio_logger=True
+    logger=False,
+    engineio_logger=False
 )
 
-# Create FastAPI app
-app = FastAPI()
-
-# Create ASGI app with Socket.IO
-socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
+# Create ASGI app with Socket.IO mounted at /socket.io
+socket_asgi_app = socketio.ASGIApp(sio, socketio_path='socket.io')
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
