@@ -38,7 +38,9 @@ const DoctorDashboard = () => {
   };
 
   useEffect(() => {
-    fetchSchedules();
+    if (token) {
+      fetchSchedules();
+    }
   }, [token]);
 
   const handleStartPractice = async (scheduleId) => {

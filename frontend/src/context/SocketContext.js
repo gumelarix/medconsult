@@ -15,7 +15,7 @@ export const useSocket = () => {
 };
 
 export const SocketProvider = ({ children }) => {
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const [socket, setSocket] = useState(null);
   const [connected, setConnected] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
@@ -32,19 +32,31 @@ export const SocketProvider = ({ children }) => {
       return;
     }
 
-    const newSocket = io(BACKEND_URL, {
-      transports: ['websocket', 'polling'],
+    // Connect to Socket.IO at /socket.io path
+    const socketUrl = BACKEND_URL;
+    const newSocket = io(socketUrl, {
+      path: '/socket.io/socket.io',
+      transports: ['polling', 'websocket'],
       autoConnect: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
     });
 
     newSocket.on('connect', () => {
-      console.log('Socket connected');
+      console.log('Socket connected, ID:', newSocket.id);
       setConnected(true);
       newSocket.emit('authenticate', { token });
     });
 
-    newSocket.on('disconnect', () => {
-      console.log('Socket disconnected');
+    newSocket.on('connect_error', (error) => {
+      console.log('Socket connection error:', error.message);
+      // Still allow app to work without real-time
+      setConnected(false);
+    });
+
+    newSocket.on('disconnect', (reason) => {
+      console.log('Socket disconnected:', reason);
       setConnected(false);
       setAuthenticated(false);
     });
