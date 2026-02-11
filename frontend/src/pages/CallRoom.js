@@ -29,6 +29,7 @@ const CallRoom = () => {
   const [remotePeerId, setRemotePeerId] = useState(null);
   const [callActive, setCallActive] = useState(false);
   const [localStreamReady, setLocalStreamReady] = useState(false);
+  const [mediaInitialized, setMediaInitialized] = useState(false);
   
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -44,53 +45,65 @@ const CallRoom = () => {
     callSessionRef.current = callSession;
   }, [callSession]);
 
-  const fetchCallSession = useCallback(async () => {
-    try {
-      console.log('Fetching call session:', callSessionId);
-      const response = await axios.get(`${API}/call-sessions/${callSessionId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      console.log('Call session data:', response.data);
-      setCallSession(response.data);
-      callSessionRef.current = response.data;
-      
-      // Activate call if confirmed
-      if (response.data.status === 'CONFIRMED') {
-        try {
-          await axios.post(`${API}/call-sessions/${callSessionId}/activate`, {}, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          console.log('Call activated');
-        } catch (activateErr) {
-          // Ignore activation errors - call might already be active
-          console.log('Activation error (may be ok):', activateErr.response?.data);
-        }
-      }
-      
-      // Set remote peer ID based on role
-      if (isDoctor && response.data.patientPeerId) {
-        setRemotePeerId(response.data.patientPeerId);
-      } else if (!isDoctor && response.data.doctorPeerId) {
-        setRemotePeerId(response.data.doctorPeerId);
-      }
-      
-      return response.data;
-    } catch (err) {
-      console.error('Failed to fetch call session:', err);
-      console.error('Error response:', err.response?.data);
-      setError('Unable to join call. Access denied or call not found.');
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }, [callSessionId, token, isDoctor]);
-
-  // Initialize media and peer connection
+  // First: Verify call session exists and user has access
   useEffect(() => {
+    const verifyCallSession = async () => {
+      if (!token || !callSessionId) {
+        setError('Missing authentication or call session ID');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        console.log('Verifying call session:', callSessionId);
+        const response = await axios.get(`${API}/call-sessions/${callSessionId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        console.log('Call session verified:', response.data);
+        setCallSession(response.data);
+        callSessionRef.current = response.data;
+        
+        // Set remote peer ID if available
+        if (isDoctor && response.data.patientPeerId) {
+          setRemotePeerId(response.data.patientPeerId);
+        } else if (!isDoctor && response.data.doctorPeerId) {
+          setRemotePeerId(response.data.doctorPeerId);
+        }
+        
+        setLoading(false);
+        
+        // Activate call if confirmed
+        if (response.data.status === 'CONFIRMED') {
+          try {
+            await axios.post(`${API}/call-sessions/${callSessionId}/activate`, {}, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+          } catch (e) {
+            // Ignore - might already be active
+            console.log('Activation note:', e.response?.data?.detail);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to verify call session:', err.response?.data || err);
+        setError(`Unable to join call: ${err.response?.data?.detail || 'Access denied or call not found'}`);
+        setLoading(false);
+      }
+    };
+
+    verifyCallSession();
+    joinCall(callSessionId);
+  }, [callSessionId, token, isDoctor, joinCall]);
+
+  // Second: Initialize media and peer connection after call session is verified
+  useEffect(() => {
+    if (loading || error || !callSession || mediaInitialized) return;
+    
     let mounted = true;
     
-    const initializeCall = async () => {
+    const initializeMedia = async () => {
       try {
+        console.log('Initializing media...');
         // Get local media stream
         const stream = await navigator.mediaDevices.getUserMedia({
           video: true,
@@ -103,14 +116,15 @@ const CallRoom = () => {
         }
         
         localStreamRef.current = stream;
+        setLocalStreamReady(true);
         
-        // Set local video immediately
+        // Set local video
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
-          setLocalStreamReady(true);
         }
         
         // Initialize PeerJS
+        console.log('Initializing PeerJS...');
         const peer = new Peer();
         peerRef.current = peer;
         
@@ -126,12 +140,26 @@ const CallRoom = () => {
             await axios.post(endpoint, { peerId: id }, {
               headers: { Authorization: `Bearer ${token}` }
             });
+            console.log('Peer ID sent to server');
           } catch (err) {
             console.error('Failed to set peer ID:', err);
           }
           
-          // Fetch call session to get remote peer ID
-          await fetchCallSession();
+          // Refresh call session to get remote peer ID
+          try {
+            const response = await axios.get(`${API}/call-sessions/${callSessionId}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            if (isDoctor && response.data.patientPeerId) {
+              setRemotePeerId(response.data.patientPeerId);
+            } else if (!isDoctor && response.data.doctorPeerId) {
+              setRemotePeerId(response.data.doctorPeerId);
+            }
+          } catch (err) {
+            console.error('Failed to refresh call session:', err);
+          }
+          
           setIsConnecting(false);
         });
         
@@ -156,26 +184,30 @@ const CallRoom = () => {
         
         peer.on('error', (err) => {
           console.error('PeerJS error:', err);
-          if (err.type === 'unavailable-id') {
-            toast.error('Connection error. Please try again.');
-          }
         });
         
+        setMediaInitialized(true);
+        
       } catch (err) {
-        console.error('Failed to initialize call:', err);
-        if (err.name === 'NotAllowedError') {
-          setError('Camera and microphone access is required for video calls.');
+        console.error('Failed to initialize media:', err);
+        if (err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
+          setError('Camera and microphone access is required for video calls. Please allow access and refresh.');
         } else {
-          setError('Failed to initialize video call. Please check camera permissions.');
+          setError(`Failed to initialize video: ${err.message}`);
         }
       }
     };
     
-    initializeCall();
-    joinCall(callSessionId);
+    initializeMedia();
     
     return () => {
       mounted = false;
+    };
+  }, [loading, error, callSession, mediaInitialized, callSessionId, isDoctor, token]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(track => track.stop());
       }
@@ -183,27 +215,30 @@ const CallRoom = () => {
         peerRef.current.destroy();
       }
     };
-  }, [callSessionId, isDoctor, token, fetchCallSession, joinCall]);
+  }, []);
 
   // Connect to remote peer when their ID is available
   useEffect(() => {
     if (remotePeerId && peerRef.current && localStreamRef.current && !callRef.current) {
       console.log('Calling remote peer:', remotePeerId);
       const call = peerRef.current.call(remotePeerId, localStreamRef.current);
-      callRef.current = call;
       
-      call.on('stream', (remoteStream) => {
-        console.log('Received remote stream from call');
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = remoteStream;
-        }
-        setCallActive(true);
-      });
-      
-      call.on('close', () => {
-        console.log('Call closed');
-        setCallActive(false);
-      });
+      if (call) {
+        callRef.current = call;
+        
+        call.on('stream', (remoteStream) => {
+          console.log('Received remote stream from outgoing call');
+          if (remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = remoteStream;
+          }
+          setCallActive(true);
+        });
+        
+        call.on('close', () => {
+          console.log('Outgoing call closed');
+          setCallActive(false);
+        });
+      }
     }
   }, [remotePeerId]);
 
@@ -211,9 +246,9 @@ const CallRoom = () => {
   useEffect(() => {
     const handlePeerIdUpdated = (data) => {
       if (data.callSessionId === callSessionId) {
-        const role = isDoctor ? 'patient' : 'doctor';
-        if (data.role === role) {
-          console.log('Remote peer ID received:', data.peerId);
+        const expectedRole = isDoctor ? 'patient' : 'doctor';
+        if (data.role === expectedRole) {
+          console.log('Remote peer ID received via socket:', data.peerId);
           setRemotePeerId(data.peerId);
         }
       }
@@ -222,7 +257,7 @@ const CallRoom = () => {
     const handleCallEnded = (data) => {
       if (data.callSessionId === callSessionId) {
         toast.info('Call has ended');
-        cleanupAndNavigate(false);
+        cleanupAndNavigate();
       }
     };
     
@@ -255,7 +290,7 @@ const CallRoom = () => {
     }
   };
 
-  const cleanupAndNavigate = (sendRequest) => {
+  const cleanupAndNavigate = () => {
     // Clean up media
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => track.stop());
@@ -293,7 +328,7 @@ const CallRoom = () => {
       toast.error('Failed to end call properly');
     }
     
-    cleanupAndNavigate(true);
+    cleanupAndNavigate();
   };
 
   if (loading) {
