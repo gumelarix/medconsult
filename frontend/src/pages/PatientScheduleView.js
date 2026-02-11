@@ -95,7 +95,7 @@ const PatientScheduleView = () => {
     };
   }, [scheduleId, fetchData, joinSchedule, leaveSchedule]);
 
-  // Socket event handlers
+  // Socket event handlers (backup - polling is primary now)
   useEffect(() => {
     const handleScheduleStatusChanged = (data) => {
       if (data.scheduleId === scheduleId) {
@@ -115,7 +115,7 @@ const PatientScheduleView = () => {
     };
 
     const handleInvitation = (data) => {
-      console.log('Received invitation:', data);
+      console.log('Received invitation via socket:', data);
       if (data.scheduleId === scheduleId) {
         setInvitation(data);
       }
