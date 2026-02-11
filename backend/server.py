@@ -587,6 +587,24 @@ async def end_call_doctor(call_session_id: str, user: dict = Depends(require_doc
     
     return {"message": "Call ended"}
 
+@api_router.get("/doctor/call-sessions/{call_session_id}/status")
+async def get_call_session_status(call_session_id: str, user: dict = Depends(require_doctor)):
+    """Check the status of a call session - used for polling"""
+    session = await db.call_sessions.find_one({"id": call_session_id, "doctorId": user['id']}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=404, detail="Call session not found")
+    
+    # Get patient name
+    patient = await db.users.find_one({"id": session['patientId']}, {"_id": 0, "name": 1})
+    
+    return {
+        "callSessionId": session['id'],
+        "status": session['status'],
+        "patientId": session['patientId'],
+        "patientName": patient['name'] if patient else "Unknown",
+        "scheduleId": session['scheduleId']
+    }
+
 # ==================== PATIENT ROUTES ====================
 
 @api_router.get("/patient/schedules", response_model=List[DoctorScheduleResponse])
