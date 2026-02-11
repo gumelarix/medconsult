@@ -701,6 +701,27 @@ async def toggle_ready(schedule_id: str, request: ToggleReadyRequest, user: dict
     
     return {"message": "Ready status updated", "isReady": request.isReady, "status": new_status}
 
+@api_router.get("/patient/pending-invitation")
+async def get_pending_invitation(user: dict = Depends(require_patient)):
+    """Check if there's a pending call invitation for this patient"""
+    invitation = await db.call_sessions.find_one({
+        "patientId": user['id'],
+        "status": CallSessionStatus.INVITED
+    }, {"_id": 0})
+    
+    if invitation:
+        # Get doctor name
+        doctor = await db.users.find_one({"id": invitation['doctorId']}, {"_id": 0, "name": 1})
+        return {
+            "hasInvitation": True,
+            "callSessionId": invitation['id'],
+            "scheduleId": invitation['scheduleId'],
+            "doctorId": invitation['doctorId'],
+            "doctorName": doctor['name'] if doctor else "Doctor"
+        }
+    
+    return {"hasInvitation": False}
+
 @api_router.get("/patient/call-sessions/{call_session_id}", response_model=CallSessionResponse)
 async def get_call_session_patient(call_session_id: str, user: dict = Depends(require_patient)):
     session = await db.call_sessions.find_one({"id": call_session_id, "patientId": user['id']}, {"_id": 0})
