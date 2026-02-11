@@ -247,7 +247,7 @@ const CallRoom = () => {
 
   // Poll for call session status to detect if other party ended the call
   useEffect(() => {
-    if (loading || error || !callSession) return;
+    if (loading || error || !callSession || callEnded) return;
     
     const checkCallStatus = async () => {
       try {
@@ -276,7 +276,7 @@ const CallRoom = () => {
     return () => {
       clearInterval(pollInterval);
     };
-  }, [loading, error, callSession, callSessionId, token]);
+  }, [loading, error, callSession, callSessionId, token, callEnded, cleanupAndNavigate]);
 
   // Connect to remote peer when their ID is available
   useEffect(() => {
