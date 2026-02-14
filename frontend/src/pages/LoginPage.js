@@ -235,27 +235,6 @@ const LoginPage = () => {
                 </Button>
               </form>
             )}
-
-            {/* Demo Credentials */}
-            <div className="mt-6 pt-4 border-t border-slate-200">
-              <p className="text-xs text-slate-500 text-center mb-3">Demo credentials (after seeding)</p>
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-2 bg-slate-50 rounded-lg">
-                  <p className="font-semibold text-slate-700 flex items-center gap-1">
-                    <Stethoscope className="w-3 h-3" /> Doctor
-                  </p>
-                  <p className="text-slate-600">doctor@clinic.com</p>
-                  <p className="text-slate-400">doctor123</p>
-                </div>
-                <div className="p-2 bg-slate-50 rounded-lg">
-                  <p className="font-semibold text-slate-700 flex items-center gap-1">
-                    <Users className="w-3 h-3" /> Patient
-                  </p>
-                  <p className="text-slate-600">john@email.com</p>
-                  <p className="text-slate-400">patient123</p>
-                </div>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>

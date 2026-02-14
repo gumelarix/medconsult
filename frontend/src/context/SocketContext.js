@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = 'https://medconsult-backend-production.up.railway.app';
 
 const SocketContext = createContext(null);
 
