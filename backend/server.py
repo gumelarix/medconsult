@@ -1,5 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -32,7 +34,6 @@ security = HTTPBearer()
 
 # Create FastAPI app
 app = FastAPI()
-
 # Create Socket.IO server
 sio = socketio.AsyncServer(
     async_mode='asgi',
@@ -1063,6 +1064,24 @@ app.add_middleware(
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+# Mount static files (built frontend)
+static_dir = ROOT_DIR / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=static_dir, html=True), name="static")
+
+# Serve frontend index.html for SPA routing (catch-all route)
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    """Serve frontend for all non-API routes"""
+    # Skip API and socket.io routes
+    if full_path.startswith("api/") or full_path.startswith("socket.io"):
+        raise HTTPException(status_code=404, detail="Not Found")
+    
+    index_file = ROOT_DIR / "static" / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    raise HTTPException(status_code=404, detail="Not Found")
 
 # Mount Socket.IO to FastAPI at /socket.io path
 app.mount("/socket.io", socket_asgi_app)
