@@ -183,14 +183,13 @@ const PatientScheduleView = () => {
         console.log('Found pending invitation via polling:', response.data);
         setInvitation(response.data);
         
-        // Show native notification (sound will be handled by InvitationModal)
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('📞 Doctor is Calling', {
-            body: `${response.data.doctorName || 'Doctor'} is ready for your consultation`,
-            icon: '/icon-192.png',
-            tag: 'doctor-call',
-            requireInteraction: true,
-            silent: true // Sound handled by InvitationModal
+        // Send to service worker for background notification (works even if browser minimized)
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: 'DOCTOR_CALLING',
+            doctorName: response.data.doctorName,
+            callSessionId: response.data.callSessionId,
+            scheduleId: response.data.scheduleId
           });
         }
       }
