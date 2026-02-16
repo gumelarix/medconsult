@@ -10,6 +10,7 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
   const [showSoundPrompt, setShowSoundPrompt] = useState(true);
   const timerRef = useRef(null);
   const vibrateIntervalRef = useRef(null);
+  const isHandledRef = useRef(false); // Track if already handled
 
   // Stop all sounds and vibration
   const stopAllSounds = () => {
@@ -40,6 +41,7 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
   // Initialize timer, ringtone and vibration
   useEffect(() => {
     console.log('[InvitationModal] Modal opened - starting countdown and ringtone');
+    isHandledRef.current = false;
     
     // Try to start ringtone (may be blocked by browser if no user interaction)
     const tryStartRingtone = async () => {
@@ -61,10 +63,14 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
-          // Auto-decline on timeout
-          stopAllSounds();
-          if (timerRef.current) clearInterval(timerRef.current);
-          onDecline();
+          // Auto-decline on timeout - but only if not already handled
+          if (!isHandledRef.current) {
+            console.log('[InvitationModal] Timeout - auto-declining');
+            isHandledRef.current = true;
+            stopAllSounds();
+            if (timerRef.current) clearInterval(timerRef.current);
+            onDecline();
+          }
           return 0;
         }
         return prev - 1;
@@ -80,18 +86,22 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
       vibrateIntervalRef.current = setInterval(vibratePattern, 2000);
     }
     
-    // Cleanup on unmount
+    // Cleanup on unmount - only stop sounds, don't call onDecline
     return () => {
-      console.log('[InvitationModal] Cleanup - stopping sounds');
+      console.log('[InvitationModal] Cleanup - stopping sounds only');
       if (timerRef.current) clearInterval(timerRef.current);
       if (vibrateIntervalRef.current) clearInterval(vibrateIntervalRef.current);
       stopAllSounds();
+      // Don't call onDecline here - it might already be handled
     };
   }, [onDecline]);
 
   // Handle confirm - stop sounds then call parent handler
   const handleConfirm = () => {
-    console.log('[InvitationModal] Confirm clicked - stopping sounds');
+    if (isHandledRef.current) return; // Already handled
+    isHandledRef.current = true;
+    
+    console.log('[InvitationModal] Confirm clicked');
     stopAllSounds();
     if (timerRef.current) clearInterval(timerRef.current);
     onConfirm();
@@ -99,7 +109,10 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
 
   // Handle decline - stop sounds then call parent handler
   const handleDecline = () => {
-    console.log('[InvitationModal] Decline clicked - stopping sounds');
+    if (isHandledRef.current) return; // Already handled
+    isHandledRef.current = true;
+    
+    console.log('[InvitationModal] Decline clicked');
     stopAllSounds();
     if (timerRef.current) clearInterval(timerRef.current);
     onDecline();
