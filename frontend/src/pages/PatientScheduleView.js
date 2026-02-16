@@ -448,17 +448,38 @@ const PatientScheduleView = () => {
               </CardContent>
             </Card>
 
-            {/* Sound Alert Notice */}
-            <Card className="bg-amber-50 border-amber-200">
+            {/* Notification Settings */}
+            <Card className={notificationsEnabled ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}>
               <CardContent className="py-4">
-                <div className="flex items-center gap-3">
-                  <Volume2 className="w-5 h-5 text-amber-600" />
-                  <div>
-                    <p className="text-sm font-medium text-amber-800">Keep Your Volume On</p>
-                    <p className="text-xs text-amber-600">
-                      You'll receive a loud notification when the doctor is ready to see you.
-                    </p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {notificationsEnabled ? (
+                      <Bell className="w-5 h-5 text-emerald-600" />
+                    ) : (
+                      <Volume2 className="w-5 h-5 text-amber-600" />
+                    )}
+                    <div>
+                      <p className={`text-sm font-medium ${notificationsEnabled ? 'text-emerald-800' : 'text-amber-800'}`}>
+                        {notificationsEnabled ? 'Notifications Enabled' : 'Enable Notifications'}
+                      </p>
+                      <p className={`text-xs ${notificationsEnabled ? 'text-emerald-600' : 'text-amber-600'}`}>
+                        {notificationsEnabled 
+                          ? 'You will receive alerts even when the app is in background'
+                          : 'Get notified when doctor calls, even in background'}
+                      </p>
+                    </div>
                   </div>
+                  {!notificationsEnabled && (
+                    <Button 
+                      size="sm" 
+                      onClick={enableNotifications}
+                      className="bg-amber-500 hover:bg-amber-600"
+                      data-testid="enable-notifications-btn"
+                    >
+                      <Bell className="w-4 h-4 mr-2" />
+                      Enable
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
