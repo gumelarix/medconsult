@@ -11,10 +11,11 @@ import { Label } from '../components/ui/label';
 import { 
   Stethoscope, Calendar, Clock, Users, ArrowLeft, 
   CheckCircle, AlertCircle, RefreshCw, UserCircle, Volume2,
-  Radio, Loader2
+  Radio, Loader2, Bell
 } from 'lucide-react';
 import axios from 'axios';
 import InvitationModal from '../components/InvitationModal';
+import notificationService from '../utils/notificationService';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -28,6 +29,7 @@ const PatientScheduleView = () => {
   const [schedule, setSchedule] = useState(null);
   const [queueEntry, setQueueEntry] = useState(null);
   const [totalInQueue, setTotalInQueue] = useState(0);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isReady, setIsReady] = useState(false);
   const [toggling, setToggling] = useState(false);
