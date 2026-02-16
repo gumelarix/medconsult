@@ -198,6 +198,9 @@ const PatientScheduleView = () => {
   const handleConfirmCall = async () => {
     if (!invitation) return;
     
+    // Stop notification sound
+    notificationService.stopSound();
+    
     try {
       await axios.post(
         `${API}/patient/call-sessions/${invitation.callSessionId}/confirm`,
@@ -215,6 +218,9 @@ const PatientScheduleView = () => {
 
   const handleDeclineCall = async () => {
     if (!invitation) return;
+    
+    // Stop notification sound
+    notificationService.stopSound();
     
     try {
       await axios.post(
