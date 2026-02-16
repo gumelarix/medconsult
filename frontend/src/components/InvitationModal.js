@@ -143,7 +143,7 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
             <Button
               variant="outline"
               className="flex-1 border-red-200 text-red-600 hover:bg-red-50"
-              onClick={onDecline}
+              onClick={handleDecline}
               data-testid="decline-call-btn"
             >
               <PhoneOff className="w-4 h-4 mr-2" />
@@ -151,7 +151,7 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
             </Button>
             <Button
               className="flex-1 bg-emerald-500 hover:bg-emerald-600"
-              onClick={onConfirm}
+              onClick={handleConfirm}
               data-testid="confirm-call-btn"
             >
               <Phone className="w-4 h-4 mr-2" />
