@@ -1,13 +1,14 @@
 // Notification utility for MedConsult PWA
 
-const NOTIFICATION_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
+// Classic phone ringtone sound
+const RINGTONE_URL = 'https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3';
 
 class NotificationService {
   constructor() {
     this.swRegistration = null;
-    this.audioContext = null;
-    this.notificationSound = null;
-    this.soundEnabled = false;
+    this.ringtone = null;
+    this.ringtoneInterval = null;
+    this.isRinging = false;
   }
 
   // Initialize the notification service
@@ -25,17 +26,18 @@ class NotificationService {
       }
     }
 
-    // Preload notification sound
-    this.preloadSound();
+    // Preload ringtone
+    this.preloadRingtone();
 
     return this;
   }
 
-  // Preload the notification sound
-  preloadSound() {
-    this.notificationSound = new Audio(NOTIFICATION_SOUND_URL);
-    this.notificationSound.preload = 'auto';
-    this.notificationSound.volume = 1.0;
+  // Preload the ringtone sound
+  preloadRingtone() {
+    this.ringtone = new Audio(RINGTONE_URL);
+    this.ringtone.preload = 'auto';
+    this.ringtone.volume = 1.0;
+    this.ringtone.loop = true; // Enable looping for continuous ring
   }
 
   // Request notification permission
@@ -62,46 +64,64 @@ class NotificationService {
     return 'Notification' in window && Notification.permission === 'granted';
   }
 
-  // Play notification sound
-  async playSound() {
+  // Start playing ringtone (loops continuously)
+  async startRingtone() {
+    if (this.isRinging) return true;
+    
     try {
-      if (this.notificationSound) {
-        this.notificationSound.currentTime = 0;
-        await this.notificationSound.play();
-        this.soundEnabled = true;
+      if (this.ringtone) {
+        this.ringtone.currentTime = 0;
+        this.ringtone.loop = true;
+        await this.ringtone.play();
+        this.isRinging = true;
+        console.log('[Notification] Ringtone started');
         
-        // Play sound 3 times with intervals
-        let playCount = 0;
-        const interval = setInterval(() => {
-          playCount++;
-          if (playCount < 3) {
-            this.notificationSound.currentTime = 0;
-            this.notificationSound.play().catch(() => {});
-          } else {
-            clearInterval(interval);
-          }
-        }, 2500);
+        // Also vibrate continuously on mobile
+        if ('vibrate' in navigator) {
+          // Vibrate pattern: ring for 1s, pause 0.5s, repeat
+          this.vibrateInterval = setInterval(() => {
+            navigator.vibrate([1000, 500]);
+          }, 1500);
+        }
         
         return true;
       }
     } catch (error) {
-      console.warn('[Notification] Could not play sound:', error);
+      console.warn('[Notification] Could not play ringtone:', error);
+      // Try to play on user interaction
       return false;
     }
   }
 
-  // Stop notification sound
+  // Stop ringtone
   stopSound() {
-    if (this.notificationSound) {
-      this.notificationSound.pause();
-      this.notificationSound.currentTime = 0;
+    console.log('[Notification] Stopping ringtone');
+    this.isRinging = false;
+    
+    if (this.ringtone) {
+      this.ringtone.pause();
+      this.ringtone.currentTime = 0;
+    }
+    
+    if (this.vibrateInterval) {
+      clearInterval(this.vibrateInterval);
+      this.vibrateInterval = null;
+    }
+    
+    // Stop vibration
+    if ('vibrate' in navigator) {
+      navigator.vibrate(0);
     }
   }
 
-  // Show a notification for doctor calling
+  // Show a notification for doctor calling with ringtone
   async showDoctorCallingNotification(doctorName, callSessionId, scheduleId) {
-    // Play sound first
-    await this.playSound();
+    // Start ringtone first
+    const ringtoneStarted = await this.startRingtone();
+    
+    if (!ringtoneStarted) {
+      console.log('[Notification] Ringtone autoplay blocked - will play on interaction');
+    }
 
     // Request permission if needed
     const hasPermission = await this.requestPermission();
@@ -116,23 +136,18 @@ class NotificationService {
       });
     } else if (hasPermission) {
       // Fallback to regular notification
-      const notification = new Notification('📞 Doctor is Calling!', {
-        body: `${doctorName || 'Your doctor'} is ready to start your consultation`,
+      const notification = new Notification('📞 Incoming Call', {
+        body: `${doctorName || 'Doctor'} is calling...`,
         icon: '/icon-192.png',
         tag: 'doctor-call-' + callSessionId,
         requireInteraction: true,
-        vibrate: [200, 100, 200, 100, 200]
+        silent: true // We handle sound ourselves
       });
 
       notification.onclick = () => {
         window.focus();
         notification.close();
       };
-    }
-
-    // Also vibrate if supported
-    if ('vibrate' in navigator) {
-      navigator.vibrate([200, 100, 200, 100, 200, 100, 200]);
     }
   }
 
