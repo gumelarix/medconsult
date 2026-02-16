@@ -293,6 +293,9 @@ const PatientScheduleView = () => {
     const handleInvitation = (data) => {
       console.log('Received invitation via socket:', data);
       if (data.scheduleId === scheduleId) {
+        // Reset the handled flag for new invitation
+        callHandledRef.current = false;
+        
         setInvitation(data);
         
         // Also trigger notification via service worker
