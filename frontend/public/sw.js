@@ -1,5 +1,5 @@
-// MedConsult Service Worker v2
-const CACHE_NAME = 'medconsult-v2';
+// MedConsult Service Worker v3
+const CACHE_NAME = 'medconsult-v3';
 
 // Files to cache for offline support
 const urlsToCache = [
@@ -13,7 +13,7 @@ let pendingCallData = null;
 
 // Install event - cache essential files
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing service worker v2...');
+  console.log('[SW] Installing service worker v3...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
@@ -26,7 +26,7 @@ self.addEventListener('install', (event) => {
 
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating service worker v2...');
+  console.log('[SW] Activating service worker v3...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -85,26 +85,37 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// Show doctor calling notification (background notification - no sound)
+// Show doctor calling notification with action buttons
 function showDoctorCallingNotification(doctorName, callSessionId, scheduleId) {
-  const title = '📞 Doctor is Calling!';
+  console.log('[SW] Showing doctor calling notification');
+  
+  const title = '📞 Incoming Call';
   const options = {
-    body: `${doctorName || 'Your doctor'} is ready for your consultation. Tap to answer.`,
+    body: `${doctorName || 'Doctor'} is calling you.\nTap to answer the call.`,
     icon: '/icon-192.png',
     badge: '/icon-192.png',
     tag: 'doctor-call-' + callSessionId,
     requireInteraction: true,
     renotify: true,
-    vibrate: [300, 100, 300, 100, 300, 100, 300, 100, 300],
+    vibrate: [500, 200, 500, 200, 500, 200, 500],
     actions: [
-      { action: 'accept', title: '✓ Answer Call' },
-      { action: 'decline', title: '✗ Decline' }
+      { 
+        action: 'accept', 
+        title: '✓ Answer',
+        icon: '/icon-192.png'
+      },
+      { 
+        action: 'decline', 
+        title: '✗ Decline',
+        icon: '/icon-192.png'
+      }
     ],
     data: {
       callSessionId,
       scheduleId,
       doctorName,
-      type: 'doctor_call'
+      type: 'doctor_call',
+      url: `/patient/schedule/${scheduleId}?acceptCall=${callSessionId}`
     }
   };
   
@@ -112,7 +123,8 @@ function showDoctorCallingNotification(doctorName, callSessionId, scheduleId) {
   pendingCallData = {
     callSessionId,
     scheduleId,
-    doctorName
+    doctorName,
+    action: 'pending'
   };
   
   self.registration.showNotification(title, options);
@@ -132,7 +144,7 @@ function showNotification(title, body, data) {
   self.registration.showNotification(title, options);
 }
 
-// Handle notification click - this is the key for receiving calls via notification
+// Handle notification click
 self.addEventListener('notificationclick', (event) => {
   console.log('[SW] Notification clicked, action:', event.action);
   
@@ -141,60 +153,68 @@ self.addEventListener('notificationclick', (event) => {
   
   // Handle doctor call notification
   if (data.type === 'doctor_call') {
+    const { callSessionId, scheduleId, doctorName } = data;
+    
     if (event.action === 'decline') {
-      // User declined via notification - send decline to any open windows
+      // User clicked Decline button
+      console.log('[SW] User declined call via notification');
       event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true })
           .then((clientList) => {
+            // Notify any open windows about the decline
             for (const client of clientList) {
               client.postMessage({
                 type: 'NOTIFICATION_ACTION',
                 action: 'decline',
-                callSessionId: data.callSessionId,
-                scheduleId: data.scheduleId
+                callSessionId,
+                scheduleId
               });
             }
+            // Clear pending call
+            pendingCallData = null;
           })
       );
       return;
     }
     
-    // User accepted (clicked Accept or clicked notification body)
-    // Store the call data so the app knows to accept when it opens
+    // User clicked Accept or clicked the notification body
+    console.log('[SW] User accepted call via notification');
+    
+    // Store accept action
     pendingCallData = {
-      callSessionId: data.callSessionId,
-      scheduleId: data.scheduleId,
-      doctorName: data.doctorName,
+      callSessionId,
+      scheduleId,
+      doctorName,
       action: 'accept'
     };
     
     event.waitUntil(
       clients.matchAll({ type: 'window', includeUncontrolled: true })
         .then((clientList) => {
-          // Find and focus an existing window
+          // Try to find and focus an existing window
           for (const client of clientList) {
             if (client.url.includes(self.location.origin)) {
               // Send accept message to the window
               client.postMessage({
                 type: 'NOTIFICATION_ACTION',
                 action: 'accept',
-                callSessionId: data.callSessionId,
-                scheduleId: data.scheduleId,
-                doctorName: data.doctorName
+                callSessionId,
+                scheduleId,
+                doctorName
               });
               return client.focus();
             }
           }
           
-          // No existing window - open a new one with the schedule view
-          // The schedule view will check for pending call and auto-accept
+          // No existing window - open new one with accept parameter
+          const acceptUrl = `/patient/schedule/${scheduleId}?acceptCall=${callSessionId}`;
           if (clients.openWindow) {
-            return clients.openWindow(`/patient/schedule/${data.scheduleId}?acceptCall=${data.callSessionId}`);
+            return clients.openWindow(acceptUrl);
           }
         })
     );
   } else {
-    // Generic notification click - just open the app
+    // Generic notification - just open the app
     event.waitUntil(
       clients.matchAll({ type: 'window', includeUncontrolled: true })
         .then((clientList) => {
@@ -214,10 +234,20 @@ self.addEventListener('notificationclick', (event) => {
 // Handle notification close (user dismissed without action)
 self.addEventListener('notificationclose', (event) => {
   console.log('[SW] Notification closed without action');
-  // Clear pending call data if notification was dismissed
-  if (event.notification.data?.type === 'doctor_call') {
-    pendingCallData = null;
+  const data = event.notification.data || {};
+  
+  if (data.type === 'doctor_call') {
+    // Notify windows that notification was dismissed
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clientList) => {
+        for (const client of clientList) {
+          client.postMessage({
+            type: 'NOTIFICATION_DISMISSED',
+            callSessionId: data.callSessionId
+          });
+        }
+      });
   }
 });
 
-console.log('[SW] Service worker v2 loaded');
+console.log('[SW] Service worker v3 loaded');
