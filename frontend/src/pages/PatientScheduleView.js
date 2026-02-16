@@ -464,8 +464,8 @@ const PatientScheduleView = () => {
                       </p>
                       <p className={`text-xs ${notificationsEnabled ? 'text-emerald-600' : 'text-amber-600'}`}>
                         {notificationsEnabled 
-                          ? 'You will receive alerts even when the app is in background'
-                          : 'Get notified when doctor calls, even in background'}
+                          ? 'You will receive visual alerts when doctor calls'
+                          : 'Get notified when doctor calls you'}
                       </p>
                     </div>
                   </div>
@@ -480,6 +480,24 @@ const PatientScheduleView = () => {
                       Enable
                     </Button>
                   )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Important: Keep App Open Notice */}
+            <Card className="bg-sky-50 border-sky-200 mt-4">
+              <CardContent className="py-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-sky-600 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-sky-800">
+                      Keep This Page Open
+                    </p>
+                    <p className="text-xs text-sky-600 mt-1">
+                      For the ringtone to play when the doctor calls, please keep this browser tab open and active. 
+                      You will hear a phone ringtone when it's your turn.
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
