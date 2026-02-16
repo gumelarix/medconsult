@@ -332,14 +332,23 @@ class TestCallInvitationFlow:
         
         print("\n✓✓✓ FULL CALL INVITATION FLOW PASSED ✓✓✓")
     
-    def test_call_decline_flow(self, setup_tokens):
+    def test_call_decline_flow(self):
         """Test call decline flow"""
-        doctor_token = setup_tokens["doctor_token"]
-        patient_token = setup_tokens["patient_token"]
-        patient_id = setup_tokens["patient_id"]
-        
-        # Re-seed to get fresh data
+        # Re-seed to get fresh data first
         requests.post(f"{BASE_URL}/api/seed")
+        
+        # Get fresh tokens after seed
+        doctor_response = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "email": "doctor@clinic.com",
+            "password": "doctor123"
+        })
+        patient_response = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "email": "john@email.com",
+            "password": "patient123"
+        })
+        doctor_token = doctor_response.json()["access_token"]
+        patient_token = patient_response.json()["access_token"]
+        patient_id = patient_response.json()["user"]["id"]
         
         # Get schedule
         schedules_response = requests.get(
