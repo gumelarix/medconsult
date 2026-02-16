@@ -6,13 +6,22 @@ import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
 import { 
   Mic, MicOff, Video, VideoOff, PhoneOff, 
-  Loader2, AlertCircle, User
+  Loader2, AlertCircle, User, RefreshCw, Wifi, WifiOff
 } from 'lucide-react';
 import axios from 'axios';
 import Peer from 'peerjs';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+
+// Connection states
+const CONNECTION_STATE = {
+  CONNECTING: 'connecting',
+  CONNECTED: 'connected',
+  RECONNECTING: 'reconnecting',
+  DISCONNECTED: 'disconnected',
+  FAILED: 'failed'
+};
 
 const CallRoom = () => {
   const { callSessionId } = useParams();
@@ -25,12 +34,14 @@ const CallRoom = () => {
   const [error, setError] = useState(null);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
-  const [isConnecting, setIsConnecting] = useState(true);
+  const [connectionState, setConnectionState] = useState(CONNECTION_STATE.CONNECTING);
   const [remotePeerId, setRemotePeerId] = useState(null);
   const [callActive, setCallActive] = useState(false);
   const [localStreamReady, setLocalStreamReady] = useState(false);
   const [mediaInitialized, setMediaInitialized] = useState(false);
   const [callEnded, setCallEnded] = useState(false);
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const [showReconnectUI, setShowReconnectUI] = useState(false);
   
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -38,29 +49,45 @@ const CallRoom = () => {
   const localStreamRef = useRef(null);
   const callRef = useRef(null);
   const callSessionRef = useRef(null);
+  const reconnectTimeoutRef = useRef(null);
+  const connectionCheckIntervalRef = useRef(null);
 
   const isDoctor = user?.role === 'DOCTOR';
+  const MAX_RECONNECT_ATTEMPTS = 3;
 
   // Store callSession in ref for use in callbacks
   useEffect(() => {
     callSessionRef.current = callSession;
   }, [callSession]);
 
+  // Cleanup function
+  const cleanupPeerConnection = useCallback(() => {
+    console.log('[CallRoom] Cleaning up peer connection');
+    if (callRef.current) {
+      callRef.current.close();
+      callRef.current = null;
+    }
+    if (peerRef.current) {
+      peerRef.current.destroy();
+      peerRef.current = null;
+    }
+    setCallActive(false);
+  }, []);
+
   // Cleanup and navigate function
   const cleanupAndNavigate = useCallback(() => {
-    if (callEnded) return; // Prevent multiple calls
+    if (callEnded) return;
     setCallEnded(true);
+    
+    // Clear intervals
+    if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+    if (connectionCheckIntervalRef.current) clearInterval(connectionCheckIntervalRef.current);
     
     // Clean up media
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => track.stop());
     }
-    if (callRef.current) {
-      callRef.current.close();
-    }
-    if (peerRef.current) {
-      peerRef.current.destroy();
-    }
+    cleanupPeerConnection();
     
     // Navigate back
     const session = callSessionRef.current;
@@ -71,7 +98,150 @@ const CallRoom = () => {
     } else {
       navigate('/patient/consultation');
     }
-  }, [isDoctor, navigate, callEnded]);
+  }, [isDoctor, navigate, callEnded, cleanupPeerConnection]);
+
+  // Initialize peer connection
+  const initializePeerConnection = useCallback(async (isReconnect = false) => {
+    if (!localStreamRef.current) {
+      console.error('[CallRoom] No local stream available');
+      return false;
+    }
+
+    try {
+      console.log(`[CallRoom] ${isReconnect ? 'Reconnecting' : 'Initializing'} peer connection...`);
+      setConnectionState(isReconnect ? CONNECTION_STATE.RECONNECTING : CONNECTION_STATE.CONNECTING);
+      
+      // Clean up existing peer if reconnecting
+      if (isReconnect) {
+        cleanupPeerConnection();
+      }
+
+      // Initialize PeerJS
+      const peer = new Peer();
+      peerRef.current = peer;
+      
+      return new Promise((resolve) => {
+        peer.on('open', async (id) => {
+          console.log('[CallRoom] PeerJS connected with ID:', id);
+          
+          // Send peer ID to server
+          const endpoint = isDoctor 
+            ? `${API}/doctor/call-sessions/${callSessionId}/set-peer-id`
+            : `${API}/patient/call-sessions/${callSessionId}/set-peer-id`;
+          
+          try {
+            await axios.post(endpoint, { peerId: id }, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            console.log('[CallRoom] Peer ID sent to server');
+          } catch (err) {
+            console.error('[CallRoom] Failed to set peer ID:', err);
+          }
+          
+          // Refresh call session to get remote peer ID
+          try {
+            const response = await axios.get(`${API}/call-sessions/${callSessionId}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            if (isDoctor && response.data.patientPeerId) {
+              setRemotePeerId(response.data.patientPeerId);
+            } else if (!isDoctor && response.data.doctorPeerId) {
+              setRemotePeerId(response.data.doctorPeerId);
+            }
+          } catch (err) {
+            console.error('[CallRoom] Failed to refresh call session:', err);
+          }
+          
+          setConnectionState(CONNECTION_STATE.CONNECTED);
+          setShowReconnectUI(false);
+          if (isReconnect) {
+            toast.success('Reconnected successfully!');
+            setReconnectAttempts(0);
+          }
+          resolve(true);
+        });
+        
+        peer.on('call', (call) => {
+          console.log('[CallRoom] Incoming call from:', call.peer);
+          call.answer(localStreamRef.current);
+          callRef.current = call;
+          
+          call.on('stream', (remoteStream) => {
+            console.log('[CallRoom] Received remote stream');
+            if (remoteVideoRef.current) {
+              remoteVideoRef.current.srcObject = remoteStream;
+            }
+            setCallActive(true);
+            setConnectionState(CONNECTION_STATE.CONNECTED);
+            setShowReconnectUI(false);
+          });
+          
+          call.on('close', () => {
+            console.log('[CallRoom] Call closed');
+            handleConnectionLost();
+          });
+
+          call.on('error', (err) => {
+            console.error('[CallRoom] Call error:', err);
+            handleConnectionLost();
+          });
+        });
+        
+        peer.on('error', (err) => {
+          console.error('[CallRoom] PeerJS error:', err);
+          if (err.type === 'network' || err.type === 'disconnected' || err.type === 'server-error') {
+            handleConnectionLost();
+          }
+          resolve(false);
+        });
+
+        peer.on('disconnected', () => {
+          console.log('[CallRoom] Peer disconnected from server');
+          handleConnectionLost();
+        });
+      });
+    } catch (err) {
+      console.error('[CallRoom] Failed to initialize peer:', err);
+      return false;
+    }
+  }, [callSessionId, isDoctor, token, cleanupPeerConnection]);
+
+  // Handle connection lost
+  const handleConnectionLost = useCallback(() => {
+    if (callEnded) return;
+    
+    console.log('[CallRoom] Connection lost detected');
+    setConnectionState(CONNECTION_STATE.DISCONNECTED);
+    setCallActive(false);
+    setShowReconnectUI(true);
+    
+    // Auto-reconnect after a short delay (first attempt only)
+    if (reconnectAttempts === 0) {
+      reconnectTimeoutRef.current = setTimeout(() => {
+        handleReconnect();
+      }, 2000);
+    }
+  }, [callEnded, reconnectAttempts]);
+
+  // Handle manual reconnect
+  const handleReconnect = useCallback(async () => {
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      toast.error('Unable to reconnect. Please try rejoining the call.');
+      setConnectionState(CONNECTION_STATE.FAILED);
+      return;
+    }
+
+    setReconnectAttempts(prev => prev + 1);
+    toast.info(`Reconnecting... (Attempt ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
+    
+    const success = await initializePeerConnection(true);
+    
+    if (!success) {
+      setConnectionState(CONNECTION_STATE.DISCONNECTED);
+      setShowReconnectUI(true);
+    }
+  }, [reconnectAttempts, initializePeerConnection]);
 
   // First: Verify call session exists and user has access
   useEffect(() => {
@@ -83,12 +253,12 @@ const CallRoom = () => {
       }
 
       try {
-        console.log('Verifying call session:', callSessionId);
+        console.log('[CallRoom] Verifying call session:', callSessionId);
         const response = await axios.get(`${API}/call-sessions/${callSessionId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         
-        console.log('Call session verified:', response.data);
+        console.log('[CallRoom] Call session verified:', response.data);
         setCallSession(response.data);
         callSessionRef.current = response.data;
         
@@ -108,12 +278,11 @@ const CallRoom = () => {
               headers: { Authorization: `Bearer ${token}` }
             });
           } catch (e) {
-            // Ignore - might already be active
-            console.log('Activation note:', e.response?.data?.detail);
+            console.log('[CallRoom] Activation note:', e.response?.data?.detail);
           }
         }
       } catch (err) {
-        console.error('Failed to verify call session:', err.response?.data || err);
+        console.error('[CallRoom] Failed to verify call session:', err.response?.data || err);
         setError(`Unable to join call: ${err.response?.data?.detail || 'Access denied or call not found'}`);
         setLoading(false);
       }
@@ -131,8 +300,7 @@ const CallRoom = () => {
     
     const initializeMedia = async () => {
       try {
-        console.log('Initializing media...');
-        // Get local media stream
+        console.log('[CallRoom] Initializing media...');
         const stream = await navigator.mediaDevices.getUserMedia({
           video: true,
           audio: true
@@ -146,78 +314,16 @@ const CallRoom = () => {
         localStreamRef.current = stream;
         setLocalStreamReady(true);
         
-        // Set local video
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
         }
         
-        // Initialize PeerJS
-        console.log('Initializing PeerJS...');
-        const peer = new Peer();
-        peerRef.current = peer;
-        
-        peer.on('open', async (id) => {
-          console.log('PeerJS connected with ID:', id);
-          
-          // Send peer ID to server
-          const endpoint = isDoctor 
-            ? `${API}/doctor/call-sessions/${callSessionId}/set-peer-id`
-            : `${API}/patient/call-sessions/${callSessionId}/set-peer-id`;
-          
-          try {
-            await axios.post(endpoint, { peerId: id }, {
-              headers: { Authorization: `Bearer ${token}` }
-            });
-            console.log('Peer ID sent to server');
-          } catch (err) {
-            console.error('Failed to set peer ID:', err);
-          }
-          
-          // Refresh call session to get remote peer ID
-          try {
-            const response = await axios.get(`${API}/call-sessions/${callSessionId}`, {
-              headers: { Authorization: `Bearer ${token}` }
-            });
-            
-            if (isDoctor && response.data.patientPeerId) {
-              setRemotePeerId(response.data.patientPeerId);
-            } else if (!isDoctor && response.data.doctorPeerId) {
-              setRemotePeerId(response.data.doctorPeerId);
-            }
-          } catch (err) {
-            console.error('Failed to refresh call session:', err);
-          }
-          
-          setIsConnecting(false);
-        });
-        
-        peer.on('call', (call) => {
-          console.log('Incoming call from:', call.peer);
-          call.answer(localStreamRef.current);
-          callRef.current = call;
-          
-          call.on('stream', (remoteStream) => {
-            console.log('Received remote stream');
-            if (remoteVideoRef.current) {
-              remoteVideoRef.current.srcObject = remoteStream;
-            }
-            setCallActive(true);
-          });
-          
-          call.on('close', () => {
-            console.log('Call closed');
-            setCallActive(false);
-          });
-        });
-        
-        peer.on('error', (err) => {
-          console.error('PeerJS error:', err);
-        });
-        
+        // Initialize peer connection
+        await initializePeerConnection(false);
         setMediaInitialized(true);
         
       } catch (err) {
-        console.error('Failed to initialize media:', err);
+        console.error('[CallRoom] Failed to initialize media:', err);
         if (err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
           setError('Camera and microphone access is required for video calls. Please allow access and refresh.');
         } else {
@@ -231,11 +337,13 @@ const CallRoom = () => {
     return () => {
       mounted = false;
     };
-  }, [loading, error, callSession, mediaInitialized, callSessionId, isDoctor, token]);
+  }, [loading, error, callSession, mediaInitialized, initializePeerConnection]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (connectionCheckIntervalRef.current) clearInterval(connectionCheckIntervalRef.current);
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(track => track.stop());
       }
@@ -256,21 +364,19 @@ const CallRoom = () => {
         });
         
         if (response.data.status === 'ENDED') {
-          console.log('Call has been ended by other party');
+          console.log('[CallRoom] Call has been ended by other party');
           toast.info('Call has ended');
           cleanupAndNavigate();
         }
       } catch (err) {
-        // If we get 404, call session might have been deleted
         if (err.response?.status === 404) {
-          console.log('Call session not found - may have ended');
+          console.log('[CallRoom] Call session not found - may have ended');
           toast.info('Call has ended');
           cleanupAndNavigate();
         }
       }
     };
     
-    // Poll every 3 seconds
     const pollInterval = setInterval(checkCallStatus, 3000);
     
     return () => {
@@ -281,27 +387,34 @@ const CallRoom = () => {
   // Connect to remote peer when their ID is available
   useEffect(() => {
     if (remotePeerId && peerRef.current && localStreamRef.current && !callRef.current) {
-      console.log('Calling remote peer:', remotePeerId);
+      console.log('[CallRoom] Calling remote peer:', remotePeerId);
       const call = peerRef.current.call(remotePeerId, localStreamRef.current);
       
       if (call) {
         callRef.current = call;
         
         call.on('stream', (remoteStream) => {
-          console.log('Received remote stream from outgoing call');
+          console.log('[CallRoom] Received remote stream from outgoing call');
           if (remoteVideoRef.current) {
             remoteVideoRef.current.srcObject = remoteStream;
           }
           setCallActive(true);
+          setConnectionState(CONNECTION_STATE.CONNECTED);
+          setShowReconnectUI(false);
         });
         
         call.on('close', () => {
-          console.log('Outgoing call closed');
-          setCallActive(false);
+          console.log('[CallRoom] Outgoing call closed');
+          handleConnectionLost();
+        });
+
+        call.on('error', (err) => {
+          console.error('[CallRoom] Outgoing call error:', err);
+          handleConnectionLost();
         });
       }
     }
-  }, [remotePeerId]);
+  }, [remotePeerId, handleConnectionLost]);
 
   // Socket event handlers
   useEffect(() => {
@@ -309,7 +422,7 @@ const CallRoom = () => {
       if (data.callSessionId === callSessionId) {
         const expectedRole = isDoctor ? 'patient' : 'doctor';
         if (data.role === expectedRole) {
-          console.log('Remote peer ID received via socket:', data.peerId);
+          console.log('[CallRoom] Remote peer ID received via socket:', data.peerId);
           setRemotePeerId(data.peerId);
         }
       }
@@ -362,12 +475,33 @@ const CallRoom = () => {
       });
       toast.success('Call ended');
     } catch (err) {
-      console.error('Failed to end call:', err);
+      console.error('[CallRoom] Failed to end call:', err);
       toast.error('Failed to end call properly');
     }
     
     cleanupAndNavigate();
   };
+
+  // Get connection status display
+  const getConnectionStatus = () => {
+    switch (connectionState) {
+      case CONNECTION_STATE.CONNECTED:
+        return { text: 'Connected', color: 'text-emerald-400', icon: Wifi };
+      case CONNECTION_STATE.CONNECTING:
+        return { text: 'Connecting...', color: 'text-amber-400', icon: Wifi };
+      case CONNECTION_STATE.RECONNECTING:
+        return { text: 'Reconnecting...', color: 'text-amber-400', icon: RefreshCw };
+      case CONNECTION_STATE.DISCONNECTED:
+        return { text: 'Connection Lost', color: 'text-red-400', icon: WifiOff };
+      case CONNECTION_STATE.FAILED:
+        return { text: 'Connection Failed', color: 'text-red-400', icon: WifiOff };
+      default:
+        return { text: 'Unknown', color: 'text-slate-400', icon: Wifi };
+    }
+  };
+
+  const connectionStatus = getConnectionStatus();
+  const StatusIcon = connectionStatus.icon;
 
   if (loading) {
     return (
@@ -411,12 +545,17 @@ const CallRoom = () => {
               <p className="text-white font-medium">
                 {isDoctor ? callSession?.patientName : callSession?.doctorName}
               </p>
-              <p className="text-slate-400 text-sm">
-                {callActive ? 'Connected' : isConnecting ? 'Connecting...' : 'Waiting for connection'}
+              <p className={`text-sm flex items-center gap-1 ${connectionStatus.color}`}>
+                <StatusIcon className={`w-3 h-3 ${connectionState === CONNECTION_STATE.RECONNECTING ? 'animate-spin' : ''}`} />
+                {connectionStatus.text}
               </p>
             </div>
           </div>
-          <div className={`w-3 h-3 rounded-full ${callActive ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
+          <div className={`w-3 h-3 rounded-full ${
+            connectionState === CONNECTION_STATE.CONNECTED ? 'bg-emerald-500' : 
+            connectionState === CONNECTION_STATE.DISCONNECTED || connectionState === CONNECTION_STATE.FAILED ? 'bg-red-500' :
+            'bg-amber-500 animate-pulse'
+          }`} />
         </div>
       </div>
 
@@ -438,12 +577,76 @@ const CallRoom = () => {
                   <User className="w-12 h-12 text-slate-500" />
                 </div>
                 <p className="text-slate-400">
-                  {isConnecting ? 'Connecting...' : 'Waiting for participant...'}
+                  {connectionState === CONNECTION_STATE.CONNECTING ? 'Connecting...' : 
+                   connectionState === CONNECTION_STATE.RECONNECTING ? 'Reconnecting...' :
+                   'Waiting for participant...'}
                 </p>
               </div>
             </div>
           )}
         </div>
+
+        {/* Connection Lost / Reconnect Overlay */}
+        {showReconnectUI && (
+          <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-30">
+            <div className="text-center max-w-sm mx-4 p-6 bg-slate-800 rounded-2xl shadow-2xl">
+              <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">
+                <WifiOff className="w-8 h-8 text-red-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-white mb-2">Connection Lost</h3>
+              <p className="text-slate-400 mb-6">
+                {reconnectAttempts >= MAX_RECONNECT_ATTEMPTS 
+                  ? 'Unable to reconnect after multiple attempts.'
+                  : 'Your connection to the call was interrupted.'}
+              </p>
+              
+              {reconnectAttempts < MAX_RECONNECT_ATTEMPTS ? (
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-slate-600 text-slate-300 hover:bg-slate-700"
+                    onClick={cleanupAndNavigate}
+                    data-testid="leave-call-btn"
+                  >
+                    Leave Call
+                  </Button>
+                  <Button
+                    className="flex-1 bg-sky-500 hover:bg-sky-600"
+                    onClick={handleReconnect}
+                    disabled={connectionState === CONNECTION_STATE.RECONNECTING}
+                    data-testid="reconnect-btn"
+                  >
+                    {connectionState === CONNECTION_STATE.RECONNECTING ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Reconnecting...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Reconnect
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  className="w-full bg-sky-500 hover:bg-sky-600"
+                  onClick={cleanupAndNavigate}
+                  data-testid="go-back-btn"
+                >
+                  Go Back
+                </Button>
+              )}
+              
+              {reconnectAttempts > 0 && reconnectAttempts < MAX_RECONNECT_ATTEMPTS && (
+                <p className="text-xs text-slate-500 mt-4">
+                  Attempt {reconnectAttempts} of {MAX_RECONNECT_ATTEMPTS}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
         
         {/* Local Video (Picture-in-Picture) */}
         <div 
