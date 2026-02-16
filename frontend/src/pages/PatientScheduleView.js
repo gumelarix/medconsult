@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { toast } from 'sonner';
@@ -22,6 +22,7 @@ const API = `${BACKEND_URL}/api`;
 
 const PatientScheduleView = () => {
   const { scheduleId } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, token } = useAuth();
   const { connected, joinSchedule, leaveSchedule, on, off } = useSocket();
@@ -35,7 +36,9 @@ const PatientScheduleView = () => {
   const [toggling, setToggling] = useState(false);
   const [joining, setJoining] = useState(false);
   const [invitation, setInvitation] = useState(null);
+  const [autoAccepting, setAutoAccepting] = useState(false);
   const pollIntervalRef = useRef(null);
+  const autoAcceptHandled = useRef(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -74,6 +77,98 @@ const PatientScheduleView = () => {
       toast.error('Notification permission denied. Please enable in browser settings.');
     }
   };
+
+  // Handle auto-accept from notification click (URL param)
+  useEffect(() => {
+    const acceptCallId = searchParams.get('acceptCall');
+    if (acceptCallId && token && !autoAcceptHandled.current) {
+      autoAcceptHandled.current = true;
+      console.log('[PatientScheduleView] Auto-accepting call from notification:', acceptCallId);
+      setAutoAccepting(true);
+      
+      // Auto-confirm the call
+      const autoConfirmCall = async () => {
+        try {
+          await axios.post(
+            `${API}/patient/call-sessions/${acceptCallId}/confirm`,
+            {},
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          toast.success('Call accepted! Joining...');
+          navigate(`/call/${acceptCallId}`);
+        } catch (error) {
+          console.error('Failed to auto-confirm call:', error);
+          toast.error('Failed to join call. It may have expired.');
+          setAutoAccepting(false);
+          // Clear URL param
+          navigate(`/patient/schedule/${scheduleId}`, { replace: true });
+        }
+      };
+      
+      autoConfirmCall();
+    }
+  }, [searchParams, token, scheduleId, navigate]);
+
+  // Listen for service worker messages (notification clicks)
+  useEffect(() => {
+    const handleServiceWorkerMessage = async (event) => {
+      console.log('[PatientScheduleView] SW message:', event.data);
+      
+      if (event.data?.type === 'NOTIFICATION_ACTION') {
+        if (event.data.action === 'accept' && event.data.callSessionId) {
+          // User accepted call from notification
+          console.log('[PatientScheduleView] Accepting call from notification');
+          try {
+            await axios.post(
+              `${API}/patient/call-sessions/${event.data.callSessionId}/confirm`,
+              {},
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            toast.success('Call accepted! Joining...');
+            notificationService.stopSound();
+            setInvitation(null);
+            navigate(`/call/${event.data.callSessionId}`);
+          } catch (error) {
+            console.error('Failed to accept call from notification:', error);
+            toast.error('Failed to join call');
+          }
+        } else if (event.data.action === 'decline' && event.data.callSessionId) {
+          // User declined call from notification
+          console.log('[PatientScheduleView] Declining call from notification');
+          try {
+            await axios.post(
+              `${API}/patient/call-sessions/${event.data.callSessionId}/decline`,
+              {},
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            toast.info('Call declined');
+            notificationService.stopSound();
+            setInvitation(null);
+            fetchData();
+          } catch (error) {
+            console.error('Failed to decline call from notification:', error);
+          }
+        }
+      }
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+      
+      // Check for pending call data from SW
+      navigator.serviceWorker.ready.then((registration) => {
+        if (registration.active) {
+          registration.active.postMessage({ type: 'CHECK_PENDING_CALL' });
+        }
+      });
+    }
+
+    return () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+      }
+    };
+  }, [token, navigate, fetchData]);
 
   // Poll for pending invitations (fallback for Socket.IO)
   const checkForInvitation = useCallback(async () => {
