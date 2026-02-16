@@ -101,10 +101,6 @@ function showDoctorCallingNotification(doctorName, callSessionId, scheduleId) {
     vibrate: [500, 200, 500, 200, 500, 200, 500],
     actions: [
       { 
-        action: 'accept', 
-        title: '✓ Answer'
-      },
-      { 
         action: 'decline', 
         title: '✗ Decline'
       }
