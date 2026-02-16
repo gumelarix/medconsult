@@ -57,20 +57,10 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
   // Initialize audio and timer
   useEffect(() => {
     // Create audio element with looping ringtone
-    const audio = new Audio();
+    const audio = new Audio(RINGTONE_URL);
     audio.volume = 1.0;
     audio.loop = true;
     audio.preload = 'auto';
-    
-    // Try main ringtone first, fallback if error
-    audio.onerror = () => {
-      console.log('[InvitationModal] Main ringtone failed, trying fallback');
-      setRingtoneError(true);
-      audio.src = FALLBACK_RINGTONE;
-      audio.load();
-    };
-    
-    audio.src = ringtoneError ? FALLBACK_RINGTONE : RINGTONE_URL;
     audioRef.current = audio;
     
     // Try to autoplay ringtone
@@ -122,7 +112,7 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
       if (timerRef.current) clearInterval(timerRef.current);
       stopRingtone();
     };
-  }, [onDecline, ringtoneError]);
+  }, [onDecline]);
 
   // Handle confirm - stop ringtone then call parent handler
   const handleConfirm = () => {
