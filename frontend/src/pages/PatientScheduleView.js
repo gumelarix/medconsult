@@ -17,7 +17,7 @@ import axios from 'axios';
 import InvitationModal from '../components/InvitationModal';
 import notificationService from '../utils/notificationService';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = 'https://medconsult-backend-production.up.railway.app';
 const API = `${BACKEND_URL}/api`;
 
 const PatientScheduleView = () => {

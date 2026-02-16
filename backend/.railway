@@ -1,0 +1,8 @@
+# Railway CLI Configuration
+# This file is optional and used by the Railway CLI
+
+# Service name displayed in Railway dashboard
+SERVICE_NAME="medconsult-backend"
+
+# Environment (production recommended for main deployments)
+ENVIRONMENT="production"

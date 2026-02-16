@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doctor-Patient Call Flow Swimlane Diagram</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .swimlane-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .swimlane-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            color: white;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        .swimlane-content {
+            overflow-x: auto;
+            overflow-y: auto;
+        }
+
+        svg {
+            display: block;
+            width: 100%;
+            min-height: 100vh;
+        }
+
+        .phase-box {
+            fill: #f8f9fa;
+            stroke: #dee2e6;
+            stroke-width: 2;
+        }
+
+        .actor {
+            fill: #e7f3ff;
+            stroke: #0066cc;
+            stroke-width: 2;
+        }
+
+        .actor-text {
+            fill: #0066cc;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .message-arrow {
+            stroke: #495057;
+            stroke-width: 2;
+            fill: none;
+            marker-end: url(#arrowhead);
+        }
+
+        .message-response {
+            stroke: #6c757d;
+            stroke-width: 2;
+            fill: none;
+            stroke-dasharray: 5,5;
+            marker-end: url(#arrowhead-dashed);
+        }
+
+        .message-text {
+            fill: #212529;
+            font-size: 12px;
+            font-family: monospace;
+        }
+
+        .phase-title {
+            fill: #495057;
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .timeline {
+            position: absolute;
+            left: 20px;
+            font-size: 11px;
+            fill: #6c757d;
+        }
+
+        .info-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .info-panel h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+
+        .info-section {
+            margin-bottom: 20px;
+        }
+
+        .info-section h3 {
+            color: #495057;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .info-section p {
+            color: #6c757d;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+
+        .code-block {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            border-left: 4px solid #667eea;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+
+        .status-upcoming {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-online {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-waiting {
+            background: #e7e8ea;
+            color: #383d41;
+        }
+
+        .status-ready {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-in-call {
+            background: #cce5ff;
+            color: #004085;
+        }
+
+        .status-done {
+            background: #e2e3e5;
+            color: #383d41;
+        }
+
+        .legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+
+        .flow-steps {
+            list-style: none;
+            padding: 0;
+        }
+
+        .flow-steps li {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            border-radius: 4px;
+        }
+
+        .flow-steps li strong {
+            color: #667eea;
+        }
+
+        .text-muted {
+            color: #6c757d;
+            font-size: 0.95em;
+        }
+
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .two-column {
+                grid-template-columns: 1fr;
+            }
+
+            .swimlane-container {
+                border-radius: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 Doctor-Patient Video Consultation Call Flow</h1>
+
+        <div class="swimlane-container">
+            <div class="swimlane-header">
+                Swimlane Diagram: Call Flow Sequence
+            </div>
+            <div class="swimlane-content">
+                <svg viewBox="0 0 1600 3000" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Define arrow markers -->
+                    <defs>
+                        <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                            <polygon points="0 0, 10 3, 0 6" fill="#495057" />
+                        </marker>
+                        <marker id="arrowhead-dashed" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                            <polygon points="0 0, 10 3, 0 6" fill="#6c757d" />
+                        </marker>
+                    </defs>
+
+                    <!-- Phase 1: Setup -->
+                    <rect x="50" y="100" width="1500" height="280" class="phase-box" />
+                    <text x="60" y="125" class="phase-title">PHASE 1: Setup - Doctor Starts Practice</text>
+
+                    <!-- Swim lanes -->
+                    <line x1="50" y1="140" x2="1550" y2="140" stroke="#dee2e6" stroke-width="1" />
+                    
+                    <!-- Doctor -->
+                    <rect x="50" y="140" width="100" height="80" class="actor" />
+                    <text x="100" y="185" text-anchor="middle" class="actor-text">Doctor</text>
+                    <line x1="100" y1="220" x2="100" y2="360" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+
+                    <!-- Backend API -->
+                    <rect x="800" y="140" width="100" height="80" class="actor" />
+                    <text x="850" y="185" text-anchor="middle" class="actor-text">Backend</text>
+                    <line x1="850" y1="220" x2="850" y2="360" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+
+                    <!-- Patient -->
+                    <rect x="1450" y="140" width="100" height="80" class="actor" />
+                    <text x="1500" y="185" text-anchor="middle" class="actor-text">Patient</text>
+                    <line x1="1500" y1="220" x2="1500" y2="360" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+
+                    <!-- Messages Phase 1 -->
+                    <line x1="100" y1="250" x2="850" y2="250" class="message-arrow" />
+                    <text x="475" y="240" class="message-text" text-anchor="middle">POST /start</text>
+
+                    <line x1="850" y1="280" x2="1500" y2="280" class="message-arrow" />
+                    <text x="1175" y="270" class="message-text" text-anchor="middle">socket: schedule_status_changed</text>
+
+                    <!-- Phase 2: Queue -->
+                    <rect x="50" y="400" width="1500" height="240" class="phase-box" />
+                    <text x="60" y="425" class="phase-title">PHASE 2: Patient Joins Queue</text>
+
+                    <line x1="100" y1="480" x2="100" y2="620" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+                    <line x1="850" y1="480" x2="850" y2="620" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+                    <line x1="1500" y1="480" x2="1500" y2="620" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+
+                    <line x1="1500" y1="520" x2="850" y2="520" class="message-arrow" />
+                    <text x="1175" y="510" class="message-text" text-anchor="middle">POST /join-queue</text>
+
+                    <line x1="850" y1="550" x2="100" y2="550" class="message-arrow" />
+                    <text x="475" y="540" class="message-text" text-anchor="middle">socket: queue_updated</text>
+
+                    <!-- Phase 3: Ready -->
+                    <rect x="50" y="700" width="1500" height="240" class="phase-box" />
+                    <text x="60" y="725" class="phase-title">PHASE 3: Patient Sets Ready Status</text>
+
+                    <line x1="100" y1="780" x2="100" y2="920" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+                    <line x1="850" y1="780" x2="850" y2="920" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+                    <line x1="1500" y1="780" x2="1500" y2="920" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+
+                    <line x1="1500" y1="820" x2="850" y2="820" class="message-arrow" />
+                    <text x="1175" y="810" class="message-text" text-anchor="middle">POST /toggle-ready</text>
+
+                    <line x1="850" y1="850" x2="100" y2="850" class="message-arrow" />
+                    <text x="475" y="840" class="message-text" text-anchor="middle">socket: Patient READY</text>
+
+                    <!-- Phase 4: Invitation -->
+                    <rect x="50" y="1000" width="1500" height="280" class="phase-box" />
+                    <text x="60" y="1025" class="phase-title">PHASE 4: Doctor Invites Patient (Polling Starts)</text>
+
+                    <line x1="100" y1="1080" x2="100" y2="1260" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+                    <line x1="850" y1="1080" x2="850" y2="1260" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+                    <line x1="1500" y1="1080" x2="1500" y2="1260" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+
+                    <line x1="100" y1="1120" x2="850" y2="1120" class="message-arrow" />
+                    <text x="475" y="1110" class="message-text" text-anchor="middle">POST /start-call</text>
+
+                    <line x1="850" y1="1150" x2="1500" y2="1150" class="message-arrow" />
+                    <text x="1175" y="1140" class="message-text" text-anchor="middle">socket: call_invitation</text>
+
+                    <line x1="100" y1="1210" x2="850" y2="1210" class="message-response" />
+                    <text x="475" y="1200" class="message-text" text-anchor="middle">Poll /call-sessions status (1.5s interval)</text>
+
+                    <!-- Phase 5: Confirmation -->
+                    <rect x="50" y="1340" width="1500" height="280" class="phase-box" />
+                    <text x="60" y="1365" class="phase-title">PHASE 5: Patient Confirms & Both Navigate to Call</text>
+
+                    <line x1="100" y1="1420" x2="100" y2="1600" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+                    <line x1="850" y1="1420" x2="850" y2="1600" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+                    <line x1="1500" y1="1420" x2="1500" y2="1600" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+
+                    <line x1="1500" y1="1460" x2="850" y2="1460" class="message-arrow" />
+                    <text x="1175" y="1450" class="message-text" text-anchor="middle">POST /confirm</text>
+
+                    <line x1="850" y1="1490" x2="100" y2="1490" class="message-arrow" />
+                    <text x="475" y="1480" class="message-text" text-anchor="middle">socket: call_confirmed</text>
+
+                    <line x1="100" y1="1530" x2="100" y2="1530" class="message-response" />
+                    <text x="125" y="1525" class="message-text" font-size="11">Navigate to call</text>
+
+                    <line x1="1500" y1="1545" x2="1500" y2="1545" class="message-response" />
+                    <text x="1425" y="1540" class="message-text" font-size="11">Navigate to call</text>
+
+                    <!-- Phase 6: Media Init -->
+                    <rect x="50" y="1680" width="1500" height="240" class="phase-box" style="fill: #e7f3ff; stroke: #0066cc;" />
+                    <text x="60" y="1705" class="phase-title">PHASE 6: Media Initialization & PeerJS Setup</text>
+
+                    <line x1="100" y1="1760" x2="100" y2="1900" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+                    <line x1="850" y1="1760" x2="850" y2="1900" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+                    <line x1="1500" y1="1760" x2="1500" y2="1900" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+
+                    <line x1="100" y1="1800" x2="100" y2="1800" class="message-response" />
+                    <text x="125" y="1795" class="message-text" font-size="11">getUserMedia()</text>
+
+                    <line x1="1500" y1="1820" x2="1500" y2="1820" class="message-response" />
+                    <text x="1425" y="1815" class="message-text" font-size="11">getUserMedia()</text>
+
+                    <line x1="100" y1="1850" x2="100" y2="1850" class="message-response" />
+                    <text x="125" y="1845" class="message-text" font-size="11">new Peer()</text>
+
+                    <line x1="1500" y1="1870" x2="1500" y2="1870" class="message-response" />
+                    <text x="1425" y="1865" class="message-text" font-size="11">new Peer()</text>
+
+                    <!-- Phase 7: Peer ID Exchange -->
+                    <rect x="50" y="1980" width="1500" height="320" class="phase-box" style="fill: #f0f8ff; stroke: #4169e1;" />
+                    <text x="60" y="2005" class="phase-title">PHASE 7: Peer ID Exchange via Backend</text>
+
+                    <line x1="100" y1="2060" x2="100" y2="2280" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+                    <line x1="850" y1="2060" x2="850" y2="2280" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+                    <line x1="1500" y1="2060" x2="1500" y2="2280" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+
+                    <line x1="100" y1="2100" x2="850" y2="2100" class="message-arrow" />
+                    <text x="475" y="2090" class="message-text" text-anchor="middle">POST /set-peer-id (doctorPeerId)</text>
+
+                    <line x1="850" y1="2130" x2="1500" y2="2130" class="message-arrow" />
+                    <text x="1175" y="2120" class="message-text" text-anchor="middle">socket: peer_id_updated</text>
+
+                    <line x1="1500" y1="2160" x2="850" y2="2160" class="message-arrow" />
+                    <text x="1175" y="2150" class="message-text" text-anchor="middle">POST /set-peer-id (patientPeerId)</text>
+
+                    <line x1="850" y1="2190" x2="100" y2="2190" class="message-arrow" />
+                    <text x="475" y="2180" class="message-text" text-anchor="middle">socket: peer_id_updated</text>
+
+                    <line x1="100" y1="2220" x2="850" y2="2220" class="message-response" />
+                    <text x="475" y="2210" class="message-text" text-anchor="middle">GET /call-sessions (refresh data)</text>
+
+                    <line x1="1500" y1="2240" x2="850" y2="2240" class="message-response" />
+                    <text x="1175" y="2230" class="message-text" text-anchor="middle">GET /call-sessions (refresh data)</text>
+
+                    <!-- Phase 8: WebRTC Connection -->
+                    <rect x="50" y="2360" width="1500" height="280" class="phase-box" style="fill: #fff5e6; stroke: #ff9800;" />
+                    <text x="60" y="2385" class="phase-title">PHASE 8: WebRTC Peer Connection Established</text>
+
+                    <line x1="100" y1="2440" x2="100" y2="2620" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+                    <line x1="850" y1="2440" x2="850" y2="2620" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+                    <line x1="1500" y1="2440" x2="1500" y2="2620" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+
+                    <line x1="100" y1="2480" x2="1500" y2="2480" class="message-arrow" />
+                    <text x="800" y="2470" class="message-text" text-anchor="middle">peer.call(patientPeerId, localStream)</text>
+
+                    <line x1="1500" y1="2520" x2="100" y2="2520" class="message-arrow" />
+                    <text x="800" y="2510" class="message-text" text-anchor="middle">call.answer(localStream)</text>
+
+                    <line x1="1500" y1="2560" x2="100" y2="2560" class="message-arrow" />
+                    <text x="800" y="2550" class="message-text" text-anchor="middle">Receive remote stream</text>
+
+                    <!-- Phase 9: Active Call -->
+                    <rect x="50" y="2720" width="1500" height="200" class="phase-box" style="fill: #e6ffe6; stroke: #4caf50;" />
+                    <text x="60" y="2745" class="phase-title">PHASE 9: Active Call - Users Can Control Media & End Call</text>
+
+                    <line x1="100" y1="2800" x2="100" y2="2890" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+                    <line x1="1500" y1="2800" x2="1500" y2="2890" stroke="#0066cc" stroke-width="2" stroke-dasharray="3,3" />
+
+                    <text x="120" y="2830" class="message-text" font-size="11">🎥 Toggle Mic/Video</text>
+                    <text x="120" y="2850" class="message-text" font-size="11">Poll status (3s)</text>
+
+                    <text x="1520" y="2830" class="message-text" font-size="11">🎥 Toggle Mic/Video</text>
+                    <text x="1520" y="2850" class="message-text" font-size="11">Poll status (3s)</text>
+                </svg>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <h2>📊 System Architecture & Flow Details</h2>
+
+            <div class="info-section">
+                <h3>🔄 Communication Layers</h3>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #667eea;"></div>
+                        <span><strong>HTTP API</strong> - REST endpoints for state management</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #764ba2;"></div>
+                        <span><strong>Socket.IO</strong> - Real-time WebSocket events</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #f093fb;"></div>
+                        <span><strong>PeerJS</strong> - WebRTC peer-to-peer streaming</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <h3>📋 Schedule Status States</h3>
+                <div>
+                    <span class="status-badge status-upcoming">UPCOMING</span> Scheduled but not started
+                    <span class="status-badge status-online">ONLINE</span> Doctor is conducting practice
+                    <span class="status-badge status-done">COMPLETED</span> Practice session ended
+                </div>
+            </div>
+
+            <div class="info-section">
+                <h3>👥 Queue Entry Status States</h3>
+                <div>
+                    <span class="status-badge status-waiting">WAITING</span> In queue, not ready
+                    <span class="status-badge status-ready">READY</span> Ready to accept call
+                    <span class="status-badge status-in-call">IN_CALL</span> Currently in consultation
+                    <span class="status-badge status-done">DONE</span> Consultation complete
+                </div>
+            </div>
+
+            <div class="info-section">
+                <h3>📞 Call Session Status States</h3>
+                <div>
+                    <span class="status-badge status-upcoming">INVITED</span> Awaiting patient confirmation
+                    <span class="status-badge status-ready">CONFIRMED</span> Patient accepted, ready for call
+                    <span class="status-badge status-in-call">ACTIVE</span> WebRTC connection live
+                    <span class="status-badge status-done">ENDED</span> Call terminated
+                    <span class="status-badge" style="background: #f8d7da; color: #721c24;">DECLINED</span> Patient rejected
+                    <span class="status-badge" style="background: #e2e3e5; color: #383d41;">EXPIRED</span> Timeout (60s)
+                </div>
+            </div>
+
+            <div class="two-column">
+                <div class="info-section">
+                    <h3>🔍 Polling Mechanisms (Reliability)</h3>
+                    <ul class="flow-steps">
+                        <li><strong>Doctor (Invitation):</strong> Polls <code>/call-sessions/status</code> every 1.5s</li>
+                        <li><strong>Patient (Invitation):</strong> Polls <code>/pending-invitation</code> every 2s</li>
+                        <li><strong>Both (Call):</strong> Polls <code>/call-sessions/{id}</code> every 3s</li>
+                        <li><span class="text-muted">Fallback when Socket.IO disconnects</span></li>
+                    </ul>
+                </div>
+
+                <div class="info-section">
+                    <h3>🎯 Key API Endpoints</h3>
+                    <ul class="flow-steps">
+                        <li><code>POST /doctor/schedules/{id}/start</code> - Start practice</li>
+                        <li><code>POST /patient/schedules/{id}/join-queue</code> - Join queue</li>
+                        <li><code>POST /patient/schedules/{id}/toggle-ready</code> - Set ready status</li>
+                        <li><code>POST /doctor/schedules/{id}/start-call</code> - Invite patient</li>
+                        <li><code>POST /call-sessions/{id}/activate</code> - Activate call</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <h3>🌊 9-Phase Call Flow</h3>
+                <ol class="flow-steps">
+                    <li><strong>Setup:</strong> Doctor creates schedule and starts practice session (ONLINE)</li>
+                    <li><strong>Queue Join:</strong> Patient joins queue with WAITING status</li>
+                    <li><strong>Ready:</strong> Patient toggles READY status when available</li>
+                    <li><strong>Invitation:</strong> Doctor selects ready patient and sends call invitation</li>
+                    <li><strong>Confirmation:</strong> Patient accepts or declines the call invitation</li>
+                    <li><strong>Room Init:</strong> Both navigate to CallRoom, get call_session details</li>
+                    <li><strong>Media Setup:</strong> Both initialize local media streams with getUserMedia()</li>
+                    <li><strong>Peer Exchange:</strong> Exchange Peer IDs via Backend API and Socket.IO</li>
+                    <li><strong>WebRTC Live:</strong> Establish P2P connection, stream video/audio, manage call</li>
+                </ol>
+            </div>
+
+            <div class="info-section">
+                <h3>🔐 Security & Access Control</h3>
+                <p><strong>JWT Authentication:</strong> All API requests require valid JWT token</p>
+                <p><strong>Role-based Access:</strong> Doctor endpoints protected with <code>@require_doctor</code>, Patient endpoints with <code>@require_patient</code></p>
+                <p><strong>Call Verification:</strong> Both parties verified before allowing access to call session</p>
+                <p><strong>Room-based Messaging:</strong> Socket.IO rooms ensure messages only reach intended participants</p>
+            </div>
+
+            <div class="info-section">
+                <h3>⚡ Key Technologies</h3>
+                <div class="two-column">
+                    <div>
+                        <p><strong>Backend:</strong></p>
+                        <ul class="flow-steps">
+                            <li>FastAPI + Python async</li>
+                            <li>Motor (MongoDB driver)</li>
+                            <li>python-socketio</li>
+                            <li>PyJWT for auth</li>
+                            <li>bcrypt for passwords</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <p><strong>Frontend:</strong></p>
+                        <ul class="flow-steps">
+                            <li>React 18</li>
+                            <li>Socket.io-client</li>
+                            <li>PeerJS for WebRTC</li>
+                            <li>Axios for HTTP</li>
+                            <li>TailwindCSS + UI components</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

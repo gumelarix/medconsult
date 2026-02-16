@@ -1,0 +1,224 @@
+@startuml Call_Flow_Swimlane
+!define AWSPUML https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v14.0/dist
+!include AWSPUML/AWSCommon.puml
+
+skin rose
+
+title Doctor-Patient Video Consultation Call Flow
+
+actor Doctor as DOC
+participant "Frontend\n(Doctor)" as FE_DOC
+participant "Backend API" as API
+database "MongoDB" as DB
+participant "Socket.IO" as SOCKET
+participant "PeerJS\n(WebRTC)" as PEER
+participant "Frontend\n(Patient)" as FE_PAT
+actor Patient as PAT
+
+== Phase 1: Setup - Doctor Starts Practice ==
+DOC -> FE_DOC: Click "Start Practice"
+FE_DOC -> API: POST /doctor/schedules/{id}/start
+API -> DB: Update schedule.status = ONLINE
+API -> SOCKET: emit schedule_status_changed
+SOCKET -> FE_PAT: Broadcast: Doctor Online
+
+== Phase 2: Patient Joins Queue ==
+PAT -> FE_PAT: Click "Join Queue"
+FE_PAT -> API: POST /patient/schedules/{id}/join-queue
+API -> DB: Insert queue_entry (WAITING)
+API -> SOCKET: emit queue_updated
+SOCKET -> FE_DOC: Broadcast: Queue Updated
+FE_DOC -> FE_DOC: Display patient in queue
+
+== Phase 3: Patient Sets Ready Status ==
+PAT -> FE_PAT: Toggle "Ready" switch ON
+FE_PAT -> API: POST /patient/schedules/{id}/toggle-ready
+API -> DB: Update queue_entry.status = READY
+API -> SOCKET: emit queue_updated
+SOCKET -> FE_DOC: Broadcast: Patient Ready!
+FE_DOC -> FE_DOC: Display "Ready" badge
+
+== Phase 4: Doctor Invites Patient ==
+DOC -> FE_DOC: Click "Start Call" for patient
+FE_DOC -> API: POST /doctor/schedules/{id}/start-call
+API -> DB: Create call_session (INVITED)
+API -> DB: Verify patient.status = READY
+API -> SOCKET: emit call_invitation to patient
+SOCKET -> FE_PAT: Broadcast: Incoming Call Invitation
+FE_PAT -> FE_PAT: Show InvitationModal
+FE_DOC -> FE_DOC: Start polling status (every 1.5s)
+
+== Phase 5: Patient Responds ==
+alt Patient Confirms Call
+  PAT -> FE_PAT: Click "Accept" button
+  FE_PAT -> API: POST /patient/call-sessions/{id}/confirm
+  API -> DB: Update call_session.status = CONFIRMED\nUpdate queue_entry.status = IN_CALL
+  API -> SOCKET: emit call_confirmed to doctor
+  SOCKET -> FE_DOC: Broadcast: Patient Confirmed!
+  FE_DOC -> FE_DOC: Polling detects CONFIRMED
+  FE_DOC -> FE_DOC: Navigate to /call/{callSessionId}
+else Patient Declines Call
+  PAT -> FE_PAT: Click "Decline" button
+  FE_PAT -> API: POST /patient/call-sessions/{id}/decline
+  API -> DB: Update call_session.status = DECLINED\nUpdate queue_entry.status = WAITING
+  API -> SOCKET: emit call_declined to doctor
+  SOCKET -> FE_DOC: Broadcast: Patient Declined
+  FE_DOC -> FE_DOC: Clear invitation state
+end
+
+== Phase 6: CallRoom Initialization ==
+rect rgb(220, 220, 255)
+  note over FE_DOC, FE_PAT: Both users navigate to /call/{callSessionId}
+  
+  FE_DOC -> API: GET /call-sessions/{id}
+  API -> DB: Retrieve call_session
+  API -> FE_DOC: Return call_session (no peerId yet)
+  FE_DOC -> FE_DOC: Set callSession state
+  
+  FE_PAT -> API: GET /call-sessions/{id}
+  API -> DB: Retrieve call_session
+  API -> FE_PAT: Return call_session (no peerId yet)
+  FE_PAT -> FE_PAT: Set callSession state
+end
+
+== Phase 7: Media Initialization ==
+rect rgb(220, 255, 220)
+  note over FE_DOC, FE_PAT: Initialize local media stream
+  
+  FE_DOC -> FE_DOC: Request camera/microphone access
+  FE_DOC -> PEER: navigator.mediaDevices.getUserMedia()
+  PEER -> FE_DOC: Return local video stream
+  FE_DOC -> FE_DOC: Set localVideoRef.srcObject
+  
+  FE_PAT -> FE_PAT: Request camera/microphone access
+  FE_PAT -> PEER: navigator.mediaDevices.getUserMedia()
+  PEER -> FE_PAT: Return local video stream
+  FE_PAT -> FE_PAT: Set localVideoRef.srcObject
+end
+
+== Phase 8: PeerJS Initialization ==
+rect rgb(255, 240, 220)
+  note over FE_DOC, FE_PAT: Initialize PeerJS and get unique Peer ID
+  
+  FE_DOC -> PEER: new Peer()
+  PEER -> FE_DOC: PeerJS 'open' event with doctorPeerId
+  FE_DOC -> FE_DOC: Store peer instance
+  
+  FE_PAT -> PEER: new Peer()
+  PEER -> FE_PAT: PeerJS 'open' event with patientPeerId
+  FE_PAT -> FE_PAT: Store peer instance
+end
+
+== Phase 9: Peer ID Exchange ==
+rect rgb(240, 220, 255)
+  note over FE_DOC, FE_PAT: Exchange Peer IDs via Backend
+  
+  FE_DOC -> API: POST /doctor/call-sessions/{id}/set-peer-id
+  API -> DB: Update call_session.doctorPeerId
+  API -> SOCKET: emit peer_id_updated
+  SOCKET -> FE_PAT: Broadcast: Doctor's Peer ID
+  FE_PAT -> FE_PAT: Store remotePeerId
+  
+  FE_PAT -> API: POST /patient/call-sessions/{id}/set-peer-id
+  API -> DB: Update call_session.patientPeerId
+  API -> SOCKET: emit peer_id_updated
+  SOCKET -> FE_DOC: Broadcast: Patient's Peer ID
+  FE_DOC -> FE_DOC: Store remotePeerId
+  
+  FE_DOC -> API: GET /call-sessions/{id}
+  API -> FE_DOC: Return call_session with patientPeerId
+  FE_PAT -> API: GET /call-sessions/{id}
+  API -> FE_PAT: Return call_session with doctorPeerId
+end
+
+== Phase 10: WebRTC Peer Connection ==
+rect rgb(200, 240, 255)
+  note over FE_DOC, FE_PAT: Establish WebRTC connection using PeerJS
+  
+  FE_DOC -> PEER: peer.call(patientPeerId, localStream)
+  PEER -> FE_PAT: PeerJS 'call' event
+  FE_PAT -> PEER: call.answer(localStream)
+  
+  note over FE_DOC
+    Waiting for remote stream...
+  end note
+  
+  PEER -> FE_DOC: PeerJS 'stream' event
+  FE_DOC -> FE_DOC: Set remoteVideoRef.srcObject
+  FE_DOC -> FE_DOC: setCallActive(true)
+  
+  PEER -> FE_PAT: PeerJS 'stream' event
+  FE_PAT -> FE_PAT: Set remoteVideoRef.srcObject
+  FE_PAT -> FE_PAT: setCallActive(true)
+end
+
+== Phase 11: Activate Call ==
+rect rgb(200, 255, 200)
+  FE_DOC -> API: POST /call-sessions/{id}/activate
+  API -> DB: Update call_session.status = ACTIVE
+  API -> SOCKET: emit call_activated
+  SOCKET -> FE_PAT: Broadcast: Call Activated
+  
+  note over FE_DOC, FE_PAT
+    Video call is now LIVE
+    Both users can see and hear each other
+  end note
+end
+
+== Phase 12: Active Call ==
+rect rgb(200, 255, 200)
+  par Doctor Controls
+    DOC -> FE_DOC: Toggle Mic/Camera/End
+    FE_DOC -> PEER: Stream track enabled/disabled
+    FE_DOC -> API: Poll /call-sessions/{id} (every 3s)
+  and Patient Controls
+    PAT -> FE_PAT: Toggle Mic/Camera/End
+    FE_PAT -> PEER: Stream track enabled/disabled
+    FE_PAT -> API: Poll /call-sessions/{id} (every 3s)
+  and Status Checking
+    API -> DB: Check call_session status
+  end
+end
+
+== Phase 13: Call Termination ==
+alt Doctor Ends Call
+  DOC -> FE_DOC: Click "End Call" button
+  FE_DOC -> API: POST /doctor/call-sessions/{id}/end
+else Patient Ends Call
+  PAT -> FE_PAT: Click "End Call" button
+  FE_PAT -> API: POST /patient/call-sessions/{id}/end
+end
+
+API -> DB: Update call_session.status = ENDED
+API -> DB: Update queue_entry.status = DONE
+API -> SOCKET: emit call_ended
+SOCKET -> FE_DOC: Broadcast: Call Ended
+SOCKET -> FE_PAT: Broadcast: Call Ended
+
+FE_DOC -> PEER: call.close()
+FE_DOC -> PEER: peer.destroy()
+FE_DOC -> FE_DOC: Stop all media tracks
+FE_DOC -> FE_DOC: Navigate back
+
+FE_PAT -> PEER: call.close()
+FE_PAT -> PEER: peer.destroy()
+FE_PAT -> FE_PAT: Stop all media tracks
+FE_PAT -> FE_PAT: Navigate back
+
+== Phase 14: Post-Call ==
+rect rgb(240, 240, 200)
+  FE_DOC -> FE_DOC: Return to /doctor/practice/{scheduleId}
+  FE_PAT -> FE_PAT: Return to /patient/consultation/{scheduleId}
+  
+  note over DOC
+    Doctor can invite another patient
+    or end the practice session
+  end note
+  
+  note over PAT
+    Patient can toggle ready again
+    to rejoin the queue if enabled by doctor
+  end note
+end
+
+@enduml
