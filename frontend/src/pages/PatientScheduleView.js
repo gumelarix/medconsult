@@ -357,7 +357,15 @@ const PatientScheduleView = () => {
   };
 
   const handleConfirmCall = async () => {
+    // Check if call was already handled by notification
+    if (callHandledRef.current) {
+      console.log('[PatientScheduleView] Call already handled by notification, skipping modal confirm');
+      return;
+    }
     if (!invitation) return;
+    
+    callHandledRef.current = true;
+    console.log('[PatientScheduleView] Modal confirm - accepting call:', invitation.callSessionId);
     
     // Stop notification sound
     notificationService.stopSound();
@@ -369,16 +377,26 @@ const PatientScheduleView = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       toast.success('Call confirmed! Joining...');
+      const callId = invitation.callSessionId;
       setInvitation(null);
-      navigate(`/call/${invitation.callSessionId}`);
+      navigate(`/call/${callId}`);
     } catch (error) {
       console.error('Failed to confirm call:', error);
       toast.error(error.response?.data?.detail || 'Failed to confirm call');
+      callHandledRef.current = false;
     }
   };
 
   const handleDeclineCall = async () => {
+    // Check if call was already handled by notification
+    if (callHandledRef.current) {
+      console.log('[PatientScheduleView] Call already handled by notification, skipping modal decline');
+      return;
+    }
     if (!invitation) return;
+    
+    callHandledRef.current = true;
+    console.log('[PatientScheduleView] Modal decline - declining call:', invitation.callSessionId);
     
     // Stop notification sound
     notificationService.stopSound();
@@ -396,6 +414,7 @@ const PatientScheduleView = () => {
       console.error('Failed to decline call:', error);
       toast.error(error.response?.data?.detail || 'Failed to decline call');
     }
+    callHandledRef.current = false;
   };
 
   if (loading || autoAccepting) {
