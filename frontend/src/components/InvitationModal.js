@@ -4,16 +4,13 @@ import { Card, CardContent } from './ui/card';
 import { Phone, PhoneOff, AlertTriangle, Volume2 } from 'lucide-react';
 import notificationService from '../utils/notificationService';
 
-// Longer phone ringtone (10+ seconds continuous ring)
-const RINGTONE_URL = 'https://www.soundjay.com/phone/phone-calling-1.mp3';
-// Fallback shorter ringtone
-const FALLBACK_RINGTONE = 'https://assets.mixkit.co/active_storage/sfx/1361/1361-preview.mp3';
+// Classic phone ringtone - longer audio for continuous ring (loops automatically)
+const RINGTONE_URL = 'https://assets.mixkit.co/active_storage/sfx/1361/1361-preview.mp3';
 
 const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
   const [timeLeft, setTimeLeft] = useState(30);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [showSoundPrompt, setShowSoundPrompt] = useState(true);
-  const [ringtoneError, setRingtoneError] = useState(false);
   const audioRef = useRef(null);
   const timerRef = useRef(null);
 
