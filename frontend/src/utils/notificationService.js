@@ -34,18 +34,10 @@ class NotificationService {
 
   // Preload the ringtone sound
   preloadRingtone() {
-    this.ringtone = new Audio();
+    this.ringtone = new Audio(RINGTONE_URL);
     this.ringtone.preload = 'auto';
     this.ringtone.volume = 1.0;
     this.ringtone.loop = true; // Enable looping for continuous ring
-    
-    // Try main ringtone, fallback if error
-    this.ringtone.onerror = () => {
-      console.log('[Notification] Main ringtone failed, using fallback');
-      this.ringtone.src = FALLBACK_RINGTONE;
-    };
-    
-    this.ringtone.src = RINGTONE_URL;
   }
 
   // Request notification permission
