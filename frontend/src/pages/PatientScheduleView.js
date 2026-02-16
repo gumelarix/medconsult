@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { toast } from 'sonner';
@@ -22,6 +22,7 @@ const API = `${BACKEND_URL}/api`;
 
 const PatientScheduleView = () => {
   const { scheduleId } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, token } = useAuth();
   const { connected, joinSchedule, leaveSchedule, on, off } = useSocket();
@@ -35,7 +36,10 @@ const PatientScheduleView = () => {
   const [toggling, setToggling] = useState(false);
   const [joining, setJoining] = useState(false);
   const [invitation, setInvitation] = useState(null);
+  const [autoAccepting, setAutoAccepting] = useState(false);
   const pollIntervalRef = useRef(null);
+  const autoAcceptHandled = useRef(false);
+  const callHandledRef = useRef(false); // Track if current call was already handled
 
   const fetchData = useCallback(async () => {
     try {
@@ -75,6 +79,136 @@ const PatientScheduleView = () => {
     }
   };
 
+  // Handle auto-accept from notification click (URL param)
+  useEffect(() => {
+    const acceptCallId = searchParams.get('acceptCall');
+    if (acceptCallId && token && !autoAcceptHandled.current) {
+      autoAcceptHandled.current = true;
+      console.log('[PatientScheduleView] Auto-accepting call from notification:', acceptCallId);
+      setAutoAccepting(true);
+      
+      // Auto-confirm the call
+      const autoConfirmCall = async () => {
+        try {
+          await axios.post(
+            `${API}/patient/call-sessions/${acceptCallId}/confirm`,
+            {},
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          toast.success('Call accepted! Joining...');
+          navigate(`/call/${acceptCallId}`);
+        } catch (error) {
+          console.error('Failed to auto-confirm call:', error);
+          toast.error('Failed to join call. It may have expired.');
+          setAutoAccepting(false);
+          // Clear URL param
+          navigate(`/patient/schedule/${scheduleId}`, { replace: true });
+        }
+      };
+      
+      autoConfirmCall();
+    }
+  }, [searchParams, token, scheduleId, navigate]);
+
+  // Listen for service worker messages (notification clicks)
+  useEffect(() => {
+    const handleServiceWorkerMessage = async (event) => {
+      console.log('[PatientScheduleView] SW message received:', event.data);
+      
+      if (event.data?.type === 'NOTIFICATION_ACTION') {
+        const { action, callSessionId } = event.data;
+        
+        // Mark call as handled to prevent modal from also handling it
+        callHandledRef.current = true;
+        
+        if (action === 'accept' && callSessionId) {
+          console.log('[PatientScheduleView] *** ACCEPTING call from notification:', callSessionId);
+          
+          // Clear modal and stop sounds immediately
+          setInvitation(null);
+          notificationService.stopSound();
+          
+          try {
+            const response = await axios.post(
+              `${API}/patient/call-sessions/${callSessionId}/confirm`,
+              {},
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            console.log('[PatientScheduleView] Confirm API response:', response.data);
+            toast.success('Call accepted! Joining...');
+            navigate(`/call/${callSessionId}`);
+          } catch (error) {
+            console.error('[PatientScheduleView] Failed to accept call:', error.response?.data || error);
+            toast.error('Failed to join call. It may have expired.');
+            callHandledRef.current = false;
+          }
+        } else if (action === 'decline' && callSessionId) {
+          console.log('[PatientScheduleView] *** DECLINING call from notification:', callSessionId);
+          
+          // Clear modal and stop sounds immediately
+          setInvitation(null);
+          notificationService.stopSound();
+          
+          try {
+            await axios.post(
+              `${API}/patient/call-sessions/${callSessionId}/decline`,
+              {},
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            toast.info('Call declined');
+            fetchData();
+          } catch (error) {
+            console.error('[PatientScheduleView] Failed to decline call:', error);
+          }
+          callHandledRef.current = false;
+        }
+      }
+      
+      // Handle pending call data when app opens from notification
+      if (event.data?.type === 'PENDING_CALL_DATA' && event.data.data) {
+        const { callSessionId, action } = event.data.data;
+        console.log('[PatientScheduleView] Received pending call data:', event.data.data);
+        
+        if (action === 'accept' && callSessionId) {
+          callHandledRef.current = true;
+          setInvitation(null);
+          notificationService.stopSound();
+          
+          try {
+            await axios.post(
+              `${API}/patient/call-sessions/${callSessionId}/confirm`,
+              {},
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            toast.success('Call accepted! Joining...');
+            navigate(`/call/${callSessionId}`);
+          } catch (error) {
+            console.error('Failed to accept pending call:', error);
+            toast.error('Failed to join call. It may have expired.');
+            callHandledRef.current = false;
+          }
+        }
+      }
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+      
+      // Check for pending call data from SW when page loads
+      navigator.serviceWorker.ready.then((registration) => {
+        if (registration.active) {
+          registration.active.postMessage({ type: 'CHECK_PENDING_CALL' });
+        }
+      });
+    }
+
+    return () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+      }
+    };
+  }, [token, navigate, fetchData]);
+
   // Poll for pending invitations (fallback for Socket.IO)
   const checkForInvitation = useCallback(async () => {
     if (!token || invitation) return;
@@ -86,17 +220,33 @@ const PatientScheduleView = () => {
       
       if (response.data.hasInvitation && response.data.scheduleId === scheduleId) {
         console.log('Found pending invitation via polling:', response.data);
+        
+        // Reset the handled flag for new invitation
+        callHandledRef.current = false;
+        
         setInvitation(response.data);
         
-        // Show native notification (sound will be handled by InvitationModal)
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('📞 Doctor is Calling', {
-            body: `${response.data.doctorName || 'Doctor'} is ready for your consultation`,
+        // Always send notification via service worker (shows action buttons)
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: 'DOCTOR_CALLING',
+            doctorName: response.data.doctorName,
+            callSessionId: response.data.callSessionId,
+            scheduleId: response.data.scheduleId
+          });
+          console.log('[PatientScheduleView] Sent DOCTOR_CALLING to service worker');
+        } else if ('Notification' in window && Notification.permission === 'granted') {
+          // Fallback: show notification directly if service worker not available
+          const notification = new Notification('📞 Incoming Call', {
+            body: `${response.data.doctorName || 'Doctor'} is calling you. Tap to answer.`,
             icon: '/icon-192.png',
             tag: 'doctor-call',
-            requireInteraction: true,
-            silent: true // Sound handled by InvitationModal
+            requireInteraction: true
           });
+          notification.onclick = () => {
+            window.focus();
+            notification.close();
+          };
         }
       }
     } catch (error) {
@@ -143,7 +293,21 @@ const PatientScheduleView = () => {
     const handleInvitation = (data) => {
       console.log('Received invitation via socket:', data);
       if (data.scheduleId === scheduleId) {
+        // Reset the handled flag for new invitation
+        callHandledRef.current = false;
+        
         setInvitation(data);
+        
+        // Also trigger notification via service worker
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: 'DOCTOR_CALLING',
+            doctorName: data.doctorName,
+            callSessionId: data.callSessionId,
+            scheduleId: data.scheduleId
+          });
+          console.log('[PatientScheduleView] Sent DOCTOR_CALLING to service worker via socket');
+        }
       }
     };
 
@@ -200,7 +364,15 @@ const PatientScheduleView = () => {
   };
 
   const handleConfirmCall = async () => {
+    // Check if call was already handled by notification
+    if (callHandledRef.current) {
+      console.log('[PatientScheduleView] Call already handled by notification, skipping modal confirm');
+      return;
+    }
     if (!invitation) return;
+    
+    callHandledRef.current = true;
+    console.log('[PatientScheduleView] Modal confirm - accepting call:', invitation.callSessionId);
     
     // Stop notification sound
     notificationService.stopSound();
@@ -212,16 +384,26 @@ const PatientScheduleView = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       toast.success('Call confirmed! Joining...');
+      const callId = invitation.callSessionId;
       setInvitation(null);
-      navigate(`/call/${invitation.callSessionId}`);
+      navigate(`/call/${callId}`);
     } catch (error) {
       console.error('Failed to confirm call:', error);
       toast.error(error.response?.data?.detail || 'Failed to confirm call');
+      callHandledRef.current = false;
     }
   };
 
   const handleDeclineCall = async () => {
+    // Check if call was already handled by notification
+    if (callHandledRef.current) {
+      console.log('[PatientScheduleView] Call already handled by notification, skipping modal decline');
+      return;
+    }
     if (!invitation) return;
+    
+    callHandledRef.current = true;
+    console.log('[PatientScheduleView] Modal decline - declining call:', invitation.callSessionId);
     
     // Stop notification sound
     notificationService.stopSound();
@@ -239,14 +421,17 @@ const PatientScheduleView = () => {
       console.error('Failed to decline call:', error);
       toast.error(error.response?.data?.detail || 'Failed to decline call');
     }
+    callHandledRef.current = false;
   };
 
-  if (loading) {
+  if (loading || autoAccepting) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="animate-pulse flex flex-col items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-sky-500/20" />
-          <p className="text-slate-500">Loading consultation...</p>
+          <p className="text-slate-500">
+            {autoAccepting ? 'Joining call...' : 'Loading consultation...'}
+          </p>
         </div>
       </div>
     );
@@ -468,7 +653,7 @@ const PatientScheduleView = () => {
                       </p>
                       <p className={`text-xs ${notificationsEnabled ? 'text-emerald-600' : 'text-amber-600'}`}>
                         {notificationsEnabled 
-                          ? 'You will receive visual alerts when doctor calls'
+                          ? 'Tap notification to answer call even when browser is minimized'
                           : 'Get notified when doctor calls you'}
                       </p>
                     </div>
@@ -488,19 +673,20 @@ const PatientScheduleView = () => {
               </CardContent>
             </Card>
 
-            {/* Important: Keep App Open Notice */}
+            {/* Info about notifications */}
             <Card className="bg-sky-50 border-sky-200 mt-4">
               <CardContent className="py-4">
                 <div className="flex items-start gap-3">
                   <AlertCircle className="w-5 h-5 text-sky-600 mt-0.5" />
                   <div>
                     <p className="text-sm font-medium text-sky-800">
-                      Keep This Page Open
+                      How Notifications Work
                     </p>
-                    <p className="text-xs text-sky-600 mt-1">
-                      For the ringtone to play when the doctor calls, please keep this browser tab open and active. 
-                      You will hear a phone ringtone when it's your turn.
-                    </p>
+                    <ul className="text-xs text-sky-600 mt-1 space-y-1 list-disc list-inside">
+                      <li><strong>Tab open:</strong> You'll hear a ringtone + see popup</li>
+                      <li><strong>Tab minimized:</strong> You'll get a notification - tap "Answer Call" to join</li>
+                      <li><strong>Browser closed:</strong> Enable notifications to receive alerts</li>
+                    </ul>
                   </div>
                 </div>
               </CardContent>

@@ -96,6 +96,13 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       
+      {/* Alias route for service worker notification links */}
+      <Route path="/patient/schedule/:scheduleId" element={
+        <ProtectedRoute allowedRole="PATIENT">
+          <PatientScheduleView />
+        </ProtectedRoute>
+      } />
+      
       <Route path="/call/:callSessionId" element={
         <ProtectedRoute>
           <CallRoom />

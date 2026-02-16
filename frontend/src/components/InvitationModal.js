@@ -10,6 +10,7 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
   const [showSoundPrompt, setShowSoundPrompt] = useState(true);
   const timerRef = useRef(null);
   const vibrateIntervalRef = useRef(null);
+  const isHandledRef = useRef(false); // Track if already handled
 
   // Stop all sounds and vibration
   const stopAllSounds = () => {
@@ -37,9 +38,12 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
     }
   };
 
-  // Initialize timer and try autoplay
+  // Initialize timer, ringtone and vibration
   useEffect(() => {
-    // Try to start ringtone (may be blocked by browser)
+    console.log('[InvitationModal] Modal opened - starting countdown and ringtone');
+    isHandledRef.current = false;
+    
+    // Try to start ringtone (may be blocked by browser if no user interaction)
     const tryStartRingtone = async () => {
       const started = await notificationService.startRingtone();
       if (started) {
@@ -59,45 +63,56 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
-          // Auto-decline on timeout
-          stopAllSounds();
-          if (timerRef.current) clearInterval(timerRef.current);
-          onDecline();
+          // Auto-decline on timeout - but only if not already handled
+          if (!isHandledRef.current) {
+            console.log('[InvitationModal] Timeout - auto-declining');
+            isHandledRef.current = true;
+            stopAllSounds();
+            if (timerRef.current) clearInterval(timerRef.current);
+            onDecline();
+          }
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     
-    // Vibrate pattern on mobile devices
+    // Vibrate pattern on mobile devices (continuous)
     if ('vibrate' in navigator) {
       const vibratePattern = () => {
-        navigator.vibrate([1000, 500, 1000, 500, 1000]);
+        navigator.vibrate([500, 300, 500, 300, 500]);
       };
       vibratePattern();
-      vibrateIntervalRef.current = setInterval(vibratePattern, 3500);
+      vibrateIntervalRef.current = setInterval(vibratePattern, 2000);
     }
     
-    // Cleanup on unmount
+    // Cleanup on unmount - only stop sounds, don't call onDecline
     return () => {
-      console.log('[InvitationModal] Cleanup - stopping sounds');
+      console.log('[InvitationModal] Cleanup - stopping sounds only');
       if (timerRef.current) clearInterval(timerRef.current);
       if (vibrateIntervalRef.current) clearInterval(vibrateIntervalRef.current);
       stopAllSounds();
+      // Don't call onDecline here - it might already be handled
     };
   }, [onDecline]);
 
-  // Handle confirm - stop ringtone then call parent handler
+  // Handle confirm - stop sounds then call parent handler
   const handleConfirm = () => {
-    console.log('[InvitationModal] Confirm clicked - stopping sounds');
+    if (isHandledRef.current) return; // Already handled
+    isHandledRef.current = true;
+    
+    console.log('[InvitationModal] Confirm clicked');
     stopAllSounds();
     if (timerRef.current) clearInterval(timerRef.current);
     onConfirm();
   };
 
-  // Handle decline - stop ringtone then call parent handler
+  // Handle decline - stop sounds then call parent handler
   const handleDecline = () => {
-    console.log('[InvitationModal] Decline clicked - stopping sounds');
+    if (isHandledRef.current) return; // Already handled
+    isHandledRef.current = true;
+    
+    console.log('[InvitationModal] Decline clicked');
     stopAllSounds();
     if (timerRef.current) clearInterval(timerRef.current);
     onDecline();
@@ -105,7 +120,7 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
 
   return (
     <div className="invitation-overlay" data-testid="invitation-modal">
-      {/* Sound prompt overlay */}
+      {/* Sound prompt overlay - shown if autoplay is blocked */}
       {showSoundPrompt && (
         <div 
           className="absolute inset-0 bg-amber-500 flex items-center justify-center cursor-pointer z-10"
@@ -128,7 +143,7 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
           </div>
           
           <h2 className="text-xl font-bold text-slate-900 mb-2" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-            Doctor is Ready
+            📞 Incoming Call
           </h2>
           <p className="text-slate-600 mb-4">
             {doctorName || 'Your doctor'} is ready to start your consultation
@@ -145,20 +160,20 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
           <div className="flex gap-3">
             <Button
               variant="outline"
-              className="flex-1 border-red-200 text-red-600 hover:bg-red-50"
+              className="flex-1 border-red-200 text-red-600 hover:bg-red-50 h-12 text-base"
               onClick={handleDecline}
               data-testid="decline-call-btn"
             >
-              <PhoneOff className="w-4 h-4 mr-2" />
+              <PhoneOff className="w-5 h-5 mr-2" />
               Decline
             </Button>
             <Button
-              className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+              className="flex-1 bg-emerald-500 hover:bg-emerald-600 h-12 text-base"
               onClick={handleConfirm}
               data-testid="confirm-call-btn"
             >
-              <Phone className="w-4 h-4 mr-2" />
-              Confirm
+              <Phone className="w-5 h-5 mr-2" />
+              Answer
             </Button>
           </div>
           
@@ -167,7 +182,7 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
             <div className="mt-4 p-2 bg-amber-50 rounded-lg flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-600" />
               <p className="text-xs text-amber-700">
-                Sound notifications may be blocked
+                Sound may be blocked by browser
               </p>
             </div>
           )}
