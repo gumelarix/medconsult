@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Phone, PhoneOff, AlertTriangle, Volume2 } from 'lucide-react';
+import notificationService from '../utils/notificationService';
 
-// Hospital chime notification sound URL
-const NOTIFICATION_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
+// Classic phone ringtone URL (same as notificationService)
+const RINGTONE_URL = 'https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3';
 
 const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
   const [timeLeft, setTimeLeft] = useState(30);
@@ -12,78 +13,68 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
   const [showSoundPrompt, setShowSoundPrompt] = useState(true);
   const audioRef = useRef(null);
   const timerRef = useRef(null);
-  const soundIntervalRef = useRef(null);
 
-  // Play notification sound
-  const playSound = () => {
+  // Start continuous ringtone
+  const startRingtone = async () => {
     if (audioRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(err => {
-        console.log('Audio play failed:', err);
-      });
-    }
-  };
-
-  // Enable sound on user interaction
-  const enableSound = () => {
-    if (audioRef.current) {
-      audioRef.current.play().then(() => {
+      try {
+        audioRef.current.currentTime = 0;
+        audioRef.current.loop = true;
+        await audioRef.current.play();
         setSoundEnabled(true);
         setShowSoundPrompt(false);
-        
-        // Play sound repeatedly every 3 seconds for 10 seconds max
-        let playCount = 0;
-        soundIntervalRef.current = setInterval(() => {
-          playCount++;
-          if (playCount < 4) {
-            playSound();
-          } else {
-            if (soundIntervalRef.current) {
-              clearInterval(soundIntervalRef.current);
-            }
-          }
-        }, 3000);
-      }).catch(err => {
-        console.log('Could not enable sound:', err);
-      });
+        console.log('[InvitationModal] Ringtone started');
+        return true;
+      } catch (err) {
+        console.log('[InvitationModal] Ringtone autoplay blocked:', err);
+        return false;
+      }
+    }
+    return false;
+  };
+
+  // Stop ringtone
+  const stopRingtone = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    // Also stop notification service ringtone if playing
+    notificationService.stopSound();
+  };
+
+  // Enable sound on user interaction (tap prompt)
+  const enableSound = async () => {
+    const started = await startRingtone();
+    if (started) {
+      // Also start vibration on mobile
+      if ('vibrate' in navigator) {
+        navigator.vibrate([500, 200, 500, 200, 500]);
+      }
     }
   };
 
   // Initialize audio and timer
   useEffect(() => {
-    // Create audio element
-    audioRef.current = new Audio(NOTIFICATION_SOUND_URL);
-    audioRef.current.volume = 1;
+    // Create audio element with looping ringtone
+    audioRef.current = new Audio(RINGTONE_URL);
+    audioRef.current.volume = 1.0;
+    audioRef.current.loop = true;
     
-    // Try to autoplay
-    audioRef.current.play()
-      .then(() => {
-        setSoundEnabled(true);
-        setShowSoundPrompt(false);
-        
-        // Play repeatedly
-        let playCount = 0;
-        soundIntervalRef.current = setInterval(() => {
-          playCount++;
-          if (playCount < 4) {
-            playSound();
-          } else {
-            if (soundIntervalRef.current) {
-              clearInterval(soundIntervalRef.current);
-            }
-          }
-        }, 3000);
-      })
-      .catch(() => {
-        // Autoplay blocked, show prompt
+    // Try to autoplay ringtone
+    startRingtone().then(started => {
+      if (!started) {
+        // Autoplay blocked, show tap prompt
         setShowSoundPrompt(true);
-      });
+      }
+    });
     
-    // Countdown timer
+    // Countdown timer (30 seconds to respond)
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
           // Auto-decline on timeout
+          stopRingtone();
           onDecline();
           return 0;
         }
@@ -93,13 +84,21 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
     
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
-      if (soundIntervalRef.current) clearInterval(soundIntervalRef.current);
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
+      stopRingtone();
     };
   }, [onDecline]);
+
+  // Handle confirm - stop ringtone then call parent handler
+  const handleConfirm = () => {
+    stopRingtone();
+    onConfirm();
+  };
+
+  // Handle decline - stop ringtone then call parent handler
+  const handleDecline = () => {
+    stopRingtone();
+    onDecline();
+  };
 
   return (
     <div className="invitation-overlay" data-testid="invitation-modal">
