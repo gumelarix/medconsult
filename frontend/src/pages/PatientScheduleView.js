@@ -183,7 +183,7 @@ const PatientScheduleView = () => {
         console.log('Found pending invitation via polling:', response.data);
         setInvitation(response.data);
         
-        // Send to service worker for background notification (works even if browser minimized)
+        // Always send notification via service worker (shows action buttons)
         if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
           navigator.serviceWorker.controller.postMessage({
             type: 'DOCTOR_CALLING',
@@ -191,6 +191,19 @@ const PatientScheduleView = () => {
             callSessionId: response.data.callSessionId,
             scheduleId: response.data.scheduleId
           });
+          console.log('[PatientScheduleView] Sent DOCTOR_CALLING to service worker');
+        } else if ('Notification' in window && Notification.permission === 'granted') {
+          // Fallback: show notification directly if service worker not available
+          const notification = new Notification('📞 Incoming Call', {
+            body: `${response.data.doctorName || 'Doctor'} is calling you. Tap to answer.`,
+            icon: '/icon-192.png',
+            tag: 'doctor-call',
+            requireInteraction: true
+          });
+          notification.onclick = () => {
+            window.focus();
+            notification.close();
+          };
         }
       }
     } catch (error) {
