@@ -37,12 +37,12 @@ app = FastAPI()
 sio = socketio.AsyncServer(
     async_mode='asgi',
     cors_allowed_origins='*',
-    logger=False,
-    engineio_logger=False
+    logger=True,
+    engineio_logger=True
 )
 
-# Create ASGI app with Socket.IO mounted at /socket.io
-socket_asgi_app = socketio.ASGIApp(sio, socketio_path='socket.io')
+# Socket.IO will be mounted at /api/socket.io to work with ingress routing
+socket_asgi_app = socketio.ASGIApp(sio, socketio_path='')
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
