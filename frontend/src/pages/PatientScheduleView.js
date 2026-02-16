@@ -251,6 +251,17 @@ const PatientScheduleView = () => {
       console.log('Received invitation via socket:', data);
       if (data.scheduleId === scheduleId) {
         setInvitation(data);
+        
+        // Also trigger notification via service worker
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: 'DOCTOR_CALLING',
+            doctorName: data.doctorName,
+            callSessionId: data.callSessionId,
+            scheduleId: data.scheduleId
+          });
+          console.log('[PatientScheduleView] Sent DOCTOR_CALLING to service worker via socket');
+        }
       }
     };
 
