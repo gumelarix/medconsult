@@ -32,15 +32,16 @@ export const SocketProvider = ({ children }) => {
       return;
     }
 
-    // Connect to Socket.IO at /socket.io path
+    // Connect to Socket.IO at /api/socket.io path (K8s ingress routes /api/* to backend)
     const socketUrl = BACKEND_URL;
     const newSocket = io(socketUrl, {
-      path: '/socket.io',
+      path: '/api/socket.io',
       transports: ['polling', 'websocket'],
       autoConnect: true,
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 10,
       reconnectionDelay: 1000,
+      timeout: 20000,
     });
 
     newSocket.on('connect', () => {
