@@ -4,13 +4,16 @@ import { Card, CardContent } from './ui/card';
 import { Phone, PhoneOff, AlertTriangle, Volume2 } from 'lucide-react';
 import notificationService from '../utils/notificationService';
 
-// Classic phone ringtone URL (same as notificationService)
-const RINGTONE_URL = 'https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3';
+// Longer phone ringtone (10+ seconds continuous ring)
+const RINGTONE_URL = 'https://www.soundjay.com/phone/phone-calling-1.mp3';
+// Fallback shorter ringtone
+const FALLBACK_RINGTONE = 'https://assets.mixkit.co/active_storage/sfx/1361/1361-preview.mp3';
 
 const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
   const [timeLeft, setTimeLeft] = useState(30);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [showSoundPrompt, setShowSoundPrompt] = useState(true);
+  const [ringtoneError, setRingtoneError] = useState(false);
   const audioRef = useRef(null);
   const timerRef = useRef(null);
 
@@ -57,17 +60,37 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
   // Initialize audio and timer
   useEffect(() => {
     // Create audio element with looping ringtone
-    audioRef.current = new Audio(RINGTONE_URL);
-    audioRef.current.volume = 1.0;
-    audioRef.current.loop = true;
+    const audio = new Audio();
+    audio.volume = 1.0;
+    audio.loop = true;
+    audio.preload = 'auto';
+    
+    // Try main ringtone first, fallback if error
+    audio.onerror = () => {
+      console.log('[InvitationModal] Main ringtone failed, trying fallback');
+      setRingtoneError(true);
+      audio.src = FALLBACK_RINGTONE;
+      audio.load();
+    };
+    
+    audio.src = ringtoneError ? FALLBACK_RINGTONE : RINGTONE_URL;
+    audioRef.current = audio;
     
     // Try to autoplay ringtone
-    startRingtone().then(started => {
-      if (!started) {
-        // Autoplay blocked, show tap prompt
+    const tryAutoplay = async () => {
+      try {
+        await audio.play();
+        setSoundEnabled(true);
+        setShowSoundPrompt(false);
+        console.log('[InvitationModal] Ringtone autoplayed successfully');
+      } catch (err) {
+        console.log('[InvitationModal] Autoplay blocked, waiting for user tap');
         setShowSoundPrompt(true);
       }
-    });
+    };
+    
+    // Small delay to ensure audio is loaded
+    setTimeout(tryAutoplay, 100);
     
     // Countdown timer (30 seconds to respond)
     timerRef.current = setInterval(() => {
@@ -82,21 +105,39 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
       });
     }, 1000);
     
+    // Vibrate pattern on mobile devices
+    if ('vibrate' in navigator) {
+      const vibratePattern = () => {
+        navigator.vibrate([1000, 500, 1000, 500, 1000]);
+      };
+      vibratePattern();
+      const vibrateInterval = setInterval(vibratePattern, 3500);
+      
+      return () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+        clearInterval(vibrateInterval);
+        stopRingtone();
+        navigator.vibrate(0); // Stop vibration
+      };
+    }
+    
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       stopRingtone();
     };
-  }, [onDecline]);
+  }, [onDecline, ringtoneError]);
 
   // Handle confirm - stop ringtone then call parent handler
   const handleConfirm = () => {
     stopRingtone();
+    if ('vibrate' in navigator) navigator.vibrate(0);
     onConfirm();
   };
 
   // Handle decline - stop ringtone then call parent handler
   const handleDecline = () => {
     stopRingtone();
+    if ('vibrate' in navigator) navigator.vibrate(0);
     onDecline();
   };
 
