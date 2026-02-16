@@ -1064,5 +1064,5 @@ app.add_middleware(
 async def shutdown_db_client():
     client.close()
 
-# Mount Socket.IO to FastAPI at /socket.io path
-app.mount("/socket.io", socket_asgi_app)
+# Mount Socket.IO to FastAPI at /api/socket.io path (works with K8s ingress that routes /api/* to backend)
+app.mount("/api/socket.io", socket_asgi_app)
