@@ -53,6 +53,13 @@ const PatientConsultation = () => {
       if (response.data.hasInvitation) {
         console.log('Found pending invitation via polling:', response.data);
         setInvitation(response.data);
+        
+        // Trigger native notification and sound
+        notificationService.showDoctorCallingNotification(
+          response.data.doctorName,
+          response.data.callSessionId,
+          response.data.scheduleId
+        );
       }
     } catch (error) {
       console.error('Failed to check invitation:', error);
