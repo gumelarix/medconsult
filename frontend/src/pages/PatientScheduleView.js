@@ -335,12 +335,14 @@ const PatientScheduleView = () => {
     }
   };
 
-  if (loading) {
+  if (loading || autoAccepting) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="animate-pulse flex flex-col items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-sky-500/20" />
-          <p className="text-slate-500">Loading consultation...</p>
+          <p className="text-slate-500">
+            {autoAccepting ? 'Joining call...' : 'Loading consultation...'}
+          </p>
         </div>
       </div>
     );
