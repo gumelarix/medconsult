@@ -57,6 +57,24 @@ const PatientScheduleView = () => {
     }
   }, [scheduleId, token]);
 
+  // Check notification permission status
+  useEffect(() => {
+    if ('Notification' in window) {
+      setNotificationsEnabled(Notification.permission === 'granted');
+    }
+  }, []);
+
+  // Enable notifications
+  const enableNotifications = async () => {
+    const granted = await notificationService.requestPermission();
+    setNotificationsEnabled(granted);
+    if (granted) {
+      toast.success('Notifications enabled! You will be alerted when the doctor calls.');
+    } else {
+      toast.error('Notification permission denied. Please enable in browser settings.');
+    }
+  };
+
   // Poll for pending invitations (fallback for Socket.IO)
   const checkForInvitation = useCallback(async () => {
     if (!token || invitation) return;
@@ -69,6 +87,13 @@ const PatientScheduleView = () => {
       if (response.data.hasInvitation && response.data.scheduleId === scheduleId) {
         console.log('Found pending invitation via polling:', response.data);
         setInvitation(response.data);
+        
+        // Trigger native notification and sound
+        notificationService.showDoctorCallingNotification(
+          response.data.doctorName,
+          response.data.callSessionId,
+          response.data.scheduleId
+        );
       }
     } catch (error) {
       console.error('Failed to check invitation:', error);
