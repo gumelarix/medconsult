@@ -115,38 +115,66 @@ const PatientScheduleView = () => {
       console.log('[PatientScheduleView] SW message:', event.data);
       
       if (event.data?.type === 'NOTIFICATION_ACTION') {
-        if (event.data.action === 'accept' && event.data.callSessionId) {
-          // User accepted call from notification
-          console.log('[PatientScheduleView] Accepting call from notification');
+        const { action, callSessionId } = event.data;
+        
+        if (action === 'accept' && callSessionId) {
+          // User accepted call from notification - clear modal first to prevent conflicts
+          console.log('[PatientScheduleView] Accepting call from notification:', callSessionId);
+          setInvitation(null); // Clear modal immediately
+          notificationService.stopSound();
+          
           try {
             await axios.post(
-              `${API}/patient/call-sessions/${event.data.callSessionId}/confirm`,
+              `${API}/patient/call-sessions/${callSessionId}/confirm`,
               {},
               { headers: { Authorization: `Bearer ${token}` } }
             );
             toast.success('Call accepted! Joining...');
-            notificationService.stopSound();
-            setInvitation(null);
-            navigate(`/call/${event.data.callSessionId}`);
+            navigate(`/call/${callSessionId}`);
           } catch (error) {
             console.error('Failed to accept call from notification:', error);
-            toast.error('Failed to join call');
+            toast.error('Failed to join call. It may have expired.');
           }
-        } else if (event.data.action === 'decline' && event.data.callSessionId) {
+        } else if (action === 'decline' && callSessionId) {
           // User declined call from notification
-          console.log('[PatientScheduleView] Declining call from notification');
+          console.log('[PatientScheduleView] Declining call from notification:', callSessionId);
+          setInvitation(null); // Clear modal immediately
+          notificationService.stopSound();
+          
           try {
             await axios.post(
-              `${API}/patient/call-sessions/${event.data.callSessionId}/decline`,
+              `${API}/patient/call-sessions/${callSessionId}/decline`,
               {},
               { headers: { Authorization: `Bearer ${token}` } }
             );
             toast.info('Call declined');
-            notificationService.stopSound();
-            setInvitation(null);
             fetchData();
           } catch (error) {
             console.error('Failed to decline call from notification:', error);
+          }
+        }
+      }
+      
+      // Handle pending call data when app opens from notification
+      if (event.data?.type === 'PENDING_CALL_DATA' && event.data.data) {
+        const { callSessionId, action } = event.data.data;
+        console.log('[PatientScheduleView] Received pending call data:', event.data.data);
+        
+        if (action === 'accept' && callSessionId) {
+          setInvitation(null);
+          notificationService.stopSound();
+          
+          try {
+            await axios.post(
+              `${API}/patient/call-sessions/${callSessionId}/confirm`,
+              {},
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            toast.success('Call accepted! Joining...');
+            navigate(`/call/${callSessionId}`);
+          } catch (error) {
+            console.error('Failed to accept pending call:', error);
+            toast.error('Failed to join call. It may have expired.');
           }
         }
       }
@@ -155,7 +183,7 @@ const PatientScheduleView = () => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
       
-      // Check for pending call data from SW
+      // Check for pending call data from SW when page loads
       navigator.serviceWorker.ready.then((registration) => {
         if (registration.active) {
           registration.active.postMessage({ type: 'CHECK_PENDING_CALL' });
