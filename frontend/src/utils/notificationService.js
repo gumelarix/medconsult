@@ -1,14 +1,16 @@
 // Notification utility for MedConsult PWA
 
-// Classic phone ringtone sound
-const RINGTONE_URL = 'https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3';
+// Longer phone ringtone (continuous ring sound)
+const RINGTONE_URL = 'https://www.soundjay.com/phone/phone-calling-1.mp3';
+// Fallback ringtone
+const FALLBACK_RINGTONE = 'https://assets.mixkit.co/active_storage/sfx/1361/1361-preview.mp3';
 
 class NotificationService {
   constructor() {
     this.swRegistration = null;
     this.ringtone = null;
-    this.ringtoneInterval = null;
     this.isRinging = false;
+    this.vibrateInterval = null;
   }
 
   // Initialize the notification service
