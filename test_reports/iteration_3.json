@@ -1,0 +1,85 @@
+{
+  "summary": "WebSocket (Socket.IO) real-time features are now fully working. All 4 requested features verified: connection establishment, real-time queue updates, call invitation flow, and call confirmation flow.",
+  
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "WebSocket connection establishment - doctor and patient both show 'Connected' indicator",
+    "Socket authentication - console logs show 'Socket authenticated' with userId and role",
+    "Real-time queue updates - when patient toggles ready status, doctor's queue updates via WebSocket",
+    "Real-time call invitation - when doctor starts call, patient receives invitation (via WebSocket + polling backup)",
+    "Call confirmation flow - when patient confirms, doctor receives notification and can navigate to call room",
+    "Socket.IO polling endpoint accessible at /api/socket.io",
+    "Doctor login and dashboard",
+    "Patient login and consultation view",
+    "Doctor practice room with patient queue display",
+    "Patient ready status toggle",
+    "Call invitation sent and received",
+    "Call confirmation and decline flows",
+    "Full end-to-end call flow (invite -> confirm -> end)"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_websocket_flow.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Socket.IO is correctly mounted at /api/socket.io to work with K8s ingress routing",
+    "Both WebSocket and polling transports are configured for reliability",
+    "Polling fallback ensures call invitations are received even if WebSocket has issues"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_websocket_flow.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100% (All WebSocket features working)"
+  },
+
+  "test_credentials": {
+    "doctor": {"email": "doctor@clinic.com", "password": "doctor123"},
+    "patient": {"email": "john@email.com", "password": "patient123"}
+  },
+
+  "seed_data_creation": "POST /api/seed creates doctor, 5 patients, 3 schedules, and 5 queue entries",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "WebSocket (Socket.IO) is fully working. The connection is established at /api/socket.io path. Both doctor and patient can see 'Connected'/'Live' indicators. Real-time events working: queue_updated, call_invitation, call_confirmed, call_declined. Polling is used as backup for call invitations.",
+
+  "websocket_verification_details": {
+    "connection_path": "/api/socket.io",
+    "transports": ["polling", "websocket"],
+    "events_tested": [
+      "connect - Socket connected with session ID",
+      "authenticate - Socket authenticated with JWT token",
+      "authenticated - Confirmation of successful auth",
+      "join_schedule - Join schedule room for updates",
+      "queue_updated - Real-time queue status changes",
+      "call_invitation - Doctor invites patient to call",
+      "call_confirmed - Patient confirms call invitation",
+      "call_declined - Patient declines call invitation"
+    ],
+    "console_logs_observed": [
+      "Socket connected, ID: <session_id>",
+      "Socket authenticated: {userId: <id>, role: DOCTOR/PATIENT}",
+      "Found pending invitation via polling: {hasInvitation: true, ...}",
+      "[Notification] Ringtone started"
+    ]
+  }
+}
