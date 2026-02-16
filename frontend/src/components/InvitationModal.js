@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
-import { Phone, PhoneOff, AlertTriangle } from 'lucide-react';
+import { Phone, PhoneOff, AlertTriangle, Volume2 } from 'lucide-react';
 import notificationService from '../utils/notificationService';
 
 const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
   const [timeLeft, setTimeLeft] = useState(30);
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const [showSoundPrompt, setShowSoundPrompt] = useState(true);
   const timerRef = useRef(null);
   const vibrateIntervalRef = useRef(null);
 
@@ -22,9 +24,38 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
     }
   };
 
-  // Initialize timer and vibration
+  // Enable sound on user interaction (tap prompt)
+  const enableSound = async () => {
+    const started = await notificationService.startRingtone();
+    if (started) {
+      setSoundEnabled(true);
+      setShowSoundPrompt(false);
+      // Also start vibration on mobile
+      if ('vibrate' in navigator) {
+        navigator.vibrate([500, 200, 500, 200, 500]);
+      }
+    }
+  };
+
+  // Initialize timer, ringtone and vibration
   useEffect(() => {
-    console.log('[InvitationModal] Modal opened - starting countdown');
+    console.log('[InvitationModal] Modal opened - starting countdown and ringtone');
+    
+    // Try to start ringtone (may be blocked by browser if no user interaction)
+    const tryStartRingtone = async () => {
+      const started = await notificationService.startRingtone();
+      if (started) {
+        setSoundEnabled(true);
+        setShowSoundPrompt(false);
+        console.log('[InvitationModal] Ringtone started automatically');
+      } else {
+        console.log('[InvitationModal] Autoplay blocked, showing tap prompt');
+        setShowSoundPrompt(true);
+      }
+    };
+    
+    // Small delay to ensure component is mounted
+    setTimeout(tryStartRingtone, 100);
     
     // Countdown timer (30 seconds to respond)
     timerRef.current = setInterval(() => {
@@ -76,8 +107,22 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
 
   return (
     <div className="invitation-overlay" data-testid="invitation-modal">
+      {/* Sound prompt overlay - shown if autoplay is blocked */}
+      {showSoundPrompt && (
+        <div 
+          className="absolute inset-0 bg-amber-500 flex items-center justify-center cursor-pointer z-10"
+          onClick={enableSound}
+        >
+          <div className="text-center text-white animate-pulse">
+            <Volume2 className="w-20 h-20 mx-auto mb-4" />
+            <p className="text-2xl font-bold">TAP TO ENABLE SOUND</p>
+            <p className="text-lg mt-2">Doctor is calling you!</p>
+          </div>
+        </div>
+      )}
+      
       {/* Main modal */}
-      <Card className="invitation-modal shake-alert">
+      <Card className={`invitation-modal ${!showSoundPrompt ? 'shake-alert' : ''}`}>
         <CardContent className="pt-6">
           {/* Pulsing phone icon */}
           <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4 pulse-online">
@@ -119,13 +164,15 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
             </Button>
           </div>
           
-          {/* Note about notification */}
-          <div className="mt-4 p-2 bg-sky-50 rounded-lg flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-sky-600 flex-shrink-0" />
-            <p className="text-xs text-sky-700">
-              Check your notifications for more options
-            </p>
-          </div>
+          {/* Warning if sound not enabled */}
+          {!soundEnabled && !showSoundPrompt && (
+            <div className="mt-4 p-2 bg-amber-50 rounded-lg flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              <p className="text-xs text-amber-700">
+                Sound may be blocked by browser
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
