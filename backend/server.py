@@ -37,12 +37,12 @@ app = FastAPI()
 sio = socketio.AsyncServer(
     async_mode='asgi',
     cors_allowed_origins='*',
-    logger=False,
-    engineio_logger=False
+    logger=True,
+    engineio_logger=True
 )
 
-# Create ASGI app with Socket.IO mounted at /socket.io
-socket_asgi_app = socketio.ASGIApp(sio, socketio_path='socket.io')
+# Socket.IO will be mounted at /api/socket.io to work with ingress routing
+socket_asgi_app = socketio.ASGIApp(sio, socketio_path='')
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -1064,5 +1064,5 @@ app.add_middleware(
 async def shutdown_db_client():
     client.close()
 
-# Mount Socket.IO to FastAPI at /socket.io path
-app.mount("/socket.io", socket_asgi_app)
+# Mount Socket.IO to FastAPI at /api/socket.io path (works with K8s ingress that routes /api/* to backend)
+app.mount("/api/socket.io", socket_asgi_app)

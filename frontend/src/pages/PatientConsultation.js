@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import InvitationModal from '../components/InvitationModal';
+import notificationService from '../utils/notificationService';
 
 const BACKEND_URL = 'https://medconsult-backend-production.up.railway.app';
 const API = `${BACKEND_URL}/api`;
@@ -52,6 +53,13 @@ const PatientConsultation = () => {
       if (response.data.hasInvitation) {
         console.log('Found pending invitation via polling:', response.data);
         setInvitation(response.data);
+        
+        // Trigger native notification and sound
+        notificationService.showDoctorCallingNotification(
+          response.data.doctorName,
+          response.data.callSessionId,
+          response.data.scheduleId
+        );
       }
     } catch (error) {
       console.error('Failed to check invitation:', error);
@@ -99,6 +107,9 @@ const PatientConsultation = () => {
   const handleConfirmCall = async () => {
     if (!invitation) return;
     
+    // Stop notification sound
+    notificationService.stopSound();
+    
     try {
       await axios.post(
         `${API}/patient/call-sessions/${invitation.callSessionId}/confirm`,
@@ -116,6 +127,9 @@ const PatientConsultation = () => {
 
   const handleDeclineCall = async () => {
     if (!invitation) return;
+    
+    // Stop notification sound
+    notificationService.stopSound();
     
     try {
       await axios.post(

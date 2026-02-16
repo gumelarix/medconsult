@@ -2,88 +2,66 @@ import { useState, useEffect, useRef } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Phone, PhoneOff, AlertTriangle, Volume2 } from 'lucide-react';
-
-// Hospital chime notification sound URL
-const NOTIFICATION_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
+import notificationService from '../utils/notificationService';
 
 const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
   const [timeLeft, setTimeLeft] = useState(30);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [showSoundPrompt, setShowSoundPrompt] = useState(true);
-  const audioRef = useRef(null);
   const timerRef = useRef(null);
-  const soundIntervalRef = useRef(null);
+  const vibrateIntervalRef = useRef(null);
 
-  // Play notification sound
-  const playSound = () => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(err => {
-        console.log('Audio play failed:', err);
-      });
+  // Stop all sounds and vibration
+  const stopAllSounds = () => {
+    console.log('[InvitationModal] Stopping all sounds');
+    notificationService.stopSound();
+    if ('vibrate' in navigator) {
+      navigator.vibrate(0);
+    }
+    if (vibrateIntervalRef.current) {
+      clearInterval(vibrateIntervalRef.current);
+      vibrateIntervalRef.current = null;
     }
   };
 
-  // Enable sound on user interaction
-  const enableSound = () => {
-    if (audioRef.current) {
-      audioRef.current.play().then(() => {
-        setSoundEnabled(true);
-        setShowSoundPrompt(false);
-        
-        // Play sound repeatedly every 3 seconds for 10 seconds max
-        let playCount = 0;
-        soundIntervalRef.current = setInterval(() => {
-          playCount++;
-          if (playCount < 4) {
-            playSound();
-          } else {
-            if (soundIntervalRef.current) {
-              clearInterval(soundIntervalRef.current);
-            }
-          }
-        }, 3000);
-      }).catch(err => {
-        console.log('Could not enable sound:', err);
-      });
+  // Enable sound on user interaction (tap prompt)
+  const enableSound = async () => {
+    const started = await notificationService.startRingtone();
+    if (started) {
+      setSoundEnabled(true);
+      setShowSoundPrompt(false);
+      // Also start vibration on mobile
+      if ('vibrate' in navigator) {
+        navigator.vibrate([500, 200, 500, 200, 500]);
+      }
     }
   };
 
-  // Initialize audio and timer
+  // Initialize timer and try autoplay
   useEffect(() => {
-    // Create audio element
-    audioRef.current = new Audio(NOTIFICATION_SOUND_URL);
-    audioRef.current.volume = 1;
-    
-    // Try to autoplay
-    audioRef.current.play()
-      .then(() => {
+    // Try to start ringtone (may be blocked by browser)
+    const tryStartRingtone = async () => {
+      const started = await notificationService.startRingtone();
+      if (started) {
         setSoundEnabled(true);
         setShowSoundPrompt(false);
-        
-        // Play repeatedly
-        let playCount = 0;
-        soundIntervalRef.current = setInterval(() => {
-          playCount++;
-          if (playCount < 4) {
-            playSound();
-          } else {
-            if (soundIntervalRef.current) {
-              clearInterval(soundIntervalRef.current);
-            }
-          }
-        }, 3000);
-      })
-      .catch(() => {
-        // Autoplay blocked, show prompt
+        console.log('[InvitationModal] Ringtone started automatically');
+      } else {
+        console.log('[InvitationModal] Autoplay blocked, showing tap prompt');
         setShowSoundPrompt(true);
-      });
+      }
+    };
     
-    // Countdown timer
+    // Small delay to ensure component is mounted
+    setTimeout(tryStartRingtone, 100);
+    
+    // Countdown timer (30 seconds to respond)
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
           // Auto-decline on timeout
+          stopAllSounds();
+          if (timerRef.current) clearInterval(timerRef.current);
           onDecline();
           return 0;
         }
@@ -91,15 +69,39 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
       });
     }, 1000);
     
+    // Vibrate pattern on mobile devices
+    if ('vibrate' in navigator) {
+      const vibratePattern = () => {
+        navigator.vibrate([1000, 500, 1000, 500, 1000]);
+      };
+      vibratePattern();
+      vibrateIntervalRef.current = setInterval(vibratePattern, 3500);
+    }
+    
+    // Cleanup on unmount
     return () => {
+      console.log('[InvitationModal] Cleanup - stopping sounds');
       if (timerRef.current) clearInterval(timerRef.current);
-      if (soundIntervalRef.current) clearInterval(soundIntervalRef.current);
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
+      if (vibrateIntervalRef.current) clearInterval(vibrateIntervalRef.current);
+      stopAllSounds();
     };
   }, [onDecline]);
+
+  // Handle confirm - stop ringtone then call parent handler
+  const handleConfirm = () => {
+    console.log('[InvitationModal] Confirm clicked - stopping sounds');
+    stopAllSounds();
+    if (timerRef.current) clearInterval(timerRef.current);
+    onConfirm();
+  };
+
+  // Handle decline - stop ringtone then call parent handler
+  const handleDecline = () => {
+    console.log('[InvitationModal] Decline clicked - stopping sounds');
+    stopAllSounds();
+    if (timerRef.current) clearInterval(timerRef.current);
+    onDecline();
+  };
 
   return (
     <div className="invitation-overlay" data-testid="invitation-modal">
@@ -144,7 +146,7 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
             <Button
               variant="outline"
               className="flex-1 border-red-200 text-red-600 hover:bg-red-50"
-              onClick={onDecline}
+              onClick={handleDecline}
               data-testid="decline-call-btn"
             >
               <PhoneOff className="w-4 h-4 mr-2" />
@@ -152,7 +154,7 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
             </Button>
             <Button
               className="flex-1 bg-emerald-500 hover:bg-emerald-600"
-              onClick={onConfirm}
+              onClick={handleConfirm}
               data-testid="confirm-call-btn"
             >
               <Phone className="w-4 h-4 mr-2" />

@@ -11,10 +11,11 @@ import { Label } from '../components/ui/label';
 import { 
   Stethoscope, Calendar, Clock, Users, ArrowLeft, 
   CheckCircle, AlertCircle, RefreshCw, UserCircle, Volume2,
-  Radio, Loader2
+  Radio, Loader2, Bell
 } from 'lucide-react';
 import axios from 'axios';
 import InvitationModal from '../components/InvitationModal';
+import notificationService from '../utils/notificationService';
 
 const BACKEND_URL = 'https://medconsult-backend-production.up.railway.app';
 const API = `${BACKEND_URL}/api`;
@@ -28,6 +29,7 @@ const PatientScheduleView = () => {
   const [schedule, setSchedule] = useState(null);
   const [queueEntry, setQueueEntry] = useState(null);
   const [totalInQueue, setTotalInQueue] = useState(0);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isReady, setIsReady] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -55,6 +57,24 @@ const PatientScheduleView = () => {
     }
   }, [scheduleId, token]);
 
+  // Check notification permission status
+  useEffect(() => {
+    if ('Notification' in window) {
+      setNotificationsEnabled(Notification.permission === 'granted');
+    }
+  }, []);
+
+  // Enable notifications
+  const enableNotifications = async () => {
+    const granted = await notificationService.requestPermission();
+    setNotificationsEnabled(granted);
+    if (granted) {
+      toast.success('Notifications enabled! You will be alerted when the doctor calls.');
+    } else {
+      toast.error('Notification permission denied. Please enable in browser settings.');
+    }
+  };
+
   // Poll for pending invitations (fallback for Socket.IO)
   const checkForInvitation = useCallback(async () => {
     if (!token || invitation) return;
@@ -67,6 +87,17 @@ const PatientScheduleView = () => {
       if (response.data.hasInvitation && response.data.scheduleId === scheduleId) {
         console.log('Found pending invitation via polling:', response.data);
         setInvitation(response.data);
+        
+        // Show native notification (sound will be handled by InvitationModal)
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('📞 Doctor is Calling', {
+            body: `${response.data.doctorName || 'Doctor'} is ready for your consultation`,
+            icon: '/icon-192.png',
+            tag: 'doctor-call',
+            requireInteraction: true,
+            silent: true // Sound handled by InvitationModal
+          });
+        }
       }
     } catch (error) {
       console.error('Failed to check invitation:', error);
@@ -171,6 +202,9 @@ const PatientScheduleView = () => {
   const handleConfirmCall = async () => {
     if (!invitation) return;
     
+    // Stop notification sound
+    notificationService.stopSound();
+    
     try {
       await axios.post(
         `${API}/patient/call-sessions/${invitation.callSessionId}/confirm`,
@@ -188,6 +222,9 @@ const PatientScheduleView = () => {
 
   const handleDeclineCall = async () => {
     if (!invitation) return;
+    
+    // Stop notification sound
+    notificationService.stopSound();
     
     try {
       await axios.post(
@@ -415,15 +452,54 @@ const PatientScheduleView = () => {
               </CardContent>
             </Card>
 
-            {/* Sound Alert Notice */}
-            <Card className="bg-amber-50 border-amber-200">
+            {/* Notification Settings */}
+            <Card className={notificationsEnabled ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}>
               <CardContent className="py-4">
-                <div className="flex items-center gap-3">
-                  <Volume2 className="w-5 h-5 text-amber-600" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {notificationsEnabled ? (
+                      <Bell className="w-5 h-5 text-emerald-600" />
+                    ) : (
+                      <Volume2 className="w-5 h-5 text-amber-600" />
+                    )}
+                    <div>
+                      <p className={`text-sm font-medium ${notificationsEnabled ? 'text-emerald-800' : 'text-amber-800'}`}>
+                        {notificationsEnabled ? 'Notifications Enabled' : 'Enable Notifications'}
+                      </p>
+                      <p className={`text-xs ${notificationsEnabled ? 'text-emerald-600' : 'text-amber-600'}`}>
+                        {notificationsEnabled 
+                          ? 'You will receive visual alerts when doctor calls'
+                          : 'Get notified when doctor calls you'}
+                      </p>
+                    </div>
+                  </div>
+                  {!notificationsEnabled && (
+                    <Button 
+                      size="sm" 
+                      onClick={enableNotifications}
+                      className="bg-amber-500 hover:bg-amber-600"
+                      data-testid="enable-notifications-btn"
+                    >
+                      <Bell className="w-4 h-4 mr-2" />
+                      Enable
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Important: Keep App Open Notice */}
+            <Card className="bg-sky-50 border-sky-200 mt-4">
+              <CardContent className="py-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-sky-600 mt-0.5" />
                   <div>
-                    <p className="text-sm font-medium text-amber-800">Keep Your Volume On</p>
-                    <p className="text-xs text-amber-600">
-                      You'll receive a loud notification when the doctor is ready to see you.
+                    <p className="text-sm font-medium text-sky-800">
+                      Keep This Page Open
+                    </p>
+                    <p className="text-xs text-sky-600 mt-1">
+                      For the ringtone to play when the doctor calls, please keep this browser tab open and active. 
+                      You will hear a phone ringtone when it's your turn.
                     </p>
                   </div>
                 </div>

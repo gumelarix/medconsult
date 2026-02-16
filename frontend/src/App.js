@@ -1,7 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useEffect } from "react";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { SocketProvider } from "./context/SocketContext";
+import notificationService from "./utils/notificationService";
 import LoginPage from "./pages/LoginPage";
 import DoctorDashboard from "./pages/DoctorDashboard";
 import DoctorPracticeRoom from "./pages/DoctorPracticeRoom";
@@ -9,6 +11,9 @@ import PatientConsultation from "./pages/PatientConsultation";
 import PatientScheduleView from "./pages/PatientScheduleView";
 import CallRoom from "./pages/CallRoom";
 import "@/App.css";
+
+// Initialize notification service on app load
+notificationService.init();
 
 const ProtectedRoute = ({ children, allowedRole }) => {
   const { user, loading } = useAuth();
@@ -104,6 +109,16 @@ function AppRoutes() {
 }
 
 function App() {
+  // Request notification permission on app load for patients
+  useEffect(() => {
+    // Request permission after a short delay to not be intrusive
+    const timer = setTimeout(() => {
+      notificationService.requestPermission();
+    }, 3000);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <BrowserRouter>
       <AuthProvider>
