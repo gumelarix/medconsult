@@ -88,12 +88,16 @@ const PatientScheduleView = () => {
         console.log('Found pending invitation via polling:', response.data);
         setInvitation(response.data);
         
-        // Trigger native notification and sound
-        notificationService.showDoctorCallingNotification(
-          response.data.doctorName,
-          response.data.callSessionId,
-          response.data.scheduleId
-        );
+        // Show native notification (sound will be handled by InvitationModal)
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('📞 Doctor is Calling', {
+            body: `${response.data.doctorName || 'Doctor'} is ready for your consultation`,
+            icon: '/icon-192.png',
+            tag: 'doctor-call',
+            requireInteraction: true,
+            silent: true // Sound handled by InvitationModal
+          });
+        }
       }
     } catch (error) {
       console.error('Failed to check invitation:', error);
