@@ -4,49 +4,32 @@ import { Card, CardContent } from './ui/card';
 import { Phone, PhoneOff, AlertTriangle, Volume2 } from 'lucide-react';
 import notificationService from '../utils/notificationService';
 
-// Classic phone ringtone - longer audio for continuous ring (loops automatically)
-const RINGTONE_URL = 'https://assets.mixkit.co/active_storage/sfx/1361/1361-preview.mp3';
-
 const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
   const [timeLeft, setTimeLeft] = useState(30);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [showSoundPrompt, setShowSoundPrompt] = useState(true);
-  const audioRef = useRef(null);
   const timerRef = useRef(null);
+  const vibrateIntervalRef = useRef(null);
 
-  // Start continuous ringtone
-  const startRingtone = async () => {
-    if (audioRef.current) {
-      try {
-        audioRef.current.currentTime = 0;
-        audioRef.current.loop = true;
-        await audioRef.current.play();
-        setSoundEnabled(true);
-        setShowSoundPrompt(false);
-        console.log('[InvitationModal] Ringtone started');
-        return true;
-      } catch (err) {
-        console.log('[InvitationModal] Ringtone autoplay blocked:', err);
-        return false;
-      }
-    }
-    return false;
-  };
-
-  // Stop ringtone
-  const stopRingtone = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
-    // Also stop notification service ringtone if playing
+  // Stop all sounds and vibration
+  const stopAllSounds = () => {
+    console.log('[InvitationModal] Stopping all sounds');
     notificationService.stopSound();
+    if ('vibrate' in navigator) {
+      navigator.vibrate(0);
+    }
+    if (vibrateIntervalRef.current) {
+      clearInterval(vibrateIntervalRef.current);
+      vibrateIntervalRef.current = null;
+    }
   };
 
   // Enable sound on user interaction (tap prompt)
   const enableSound = async () => {
-    const started = await startRingtone();
+    const started = await notificationService.startRingtone();
     if (started) {
+      setSoundEnabled(true);
+      setShowSoundPrompt(false);
       // Also start vibration on mobile
       if ('vibrate' in navigator) {
         navigator.vibrate([500, 200, 500, 200, 500]);
@@ -54,37 +37,31 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
     }
   };
 
-  // Initialize audio and timer
+  // Initialize timer and try autoplay
   useEffect(() => {
-    // Create audio element with looping ringtone
-    const audio = new Audio(RINGTONE_URL);
-    audio.volume = 1.0;
-    audio.loop = true;
-    audio.preload = 'auto';
-    audioRef.current = audio;
-    
-    // Try to autoplay ringtone
-    const tryAutoplay = async () => {
-      try {
-        await audio.play();
+    // Try to start ringtone (may be blocked by browser)
+    const tryStartRingtone = async () => {
+      const started = await notificationService.startRingtone();
+      if (started) {
         setSoundEnabled(true);
         setShowSoundPrompt(false);
-        console.log('[InvitationModal] Ringtone autoplayed successfully');
-      } catch (err) {
-        console.log('[InvitationModal] Autoplay blocked, waiting for user tap');
+        console.log('[InvitationModal] Ringtone started automatically');
+      } else {
+        console.log('[InvitationModal] Autoplay blocked, showing tap prompt');
         setShowSoundPrompt(true);
       }
     };
     
-    // Small delay to ensure audio is loaded
-    setTimeout(tryAutoplay, 100);
+    // Small delay to ensure component is mounted
+    setTimeout(tryStartRingtone, 100);
     
     // Countdown timer (30 seconds to respond)
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
           // Auto-decline on timeout
-          stopRingtone();
+          stopAllSounds();
+          if (timerRef.current) clearInterval(timerRef.current);
           onDecline();
           return 0;
         }
@@ -98,33 +75,31 @@ const InvitationModal = ({ doctorName, onConfirm, onDecline }) => {
         navigator.vibrate([1000, 500, 1000, 500, 1000]);
       };
       vibratePattern();
-      const vibrateInterval = setInterval(vibratePattern, 3500);
-      
-      return () => {
-        if (timerRef.current) clearInterval(timerRef.current);
-        clearInterval(vibrateInterval);
-        stopRingtone();
-        navigator.vibrate(0); // Stop vibration
-      };
+      vibrateIntervalRef.current = setInterval(vibratePattern, 3500);
     }
     
+    // Cleanup on unmount
     return () => {
+      console.log('[InvitationModal] Cleanup - stopping sounds');
       if (timerRef.current) clearInterval(timerRef.current);
-      stopRingtone();
+      if (vibrateIntervalRef.current) clearInterval(vibrateIntervalRef.current);
+      stopAllSounds();
     };
   }, [onDecline]);
 
   // Handle confirm - stop ringtone then call parent handler
   const handleConfirm = () => {
-    stopRingtone();
-    if ('vibrate' in navigator) navigator.vibrate(0);
+    console.log('[InvitationModal] Confirm clicked - stopping sounds');
+    stopAllSounds();
+    if (timerRef.current) clearInterval(timerRef.current);
     onConfirm();
   };
 
   // Handle decline - stop ringtone then call parent handler
   const handleDecline = () => {
-    stopRingtone();
-    if ('vibrate' in navigator) navigator.vibrate(0);
+    console.log('[InvitationModal] Decline clicked - stopping sounds');
+    stopAllSounds();
+    if (timerRef.current) clearInterval(timerRef.current);
     onDecline();
   };
 
