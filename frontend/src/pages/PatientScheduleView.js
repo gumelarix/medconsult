@@ -39,6 +39,7 @@ const PatientScheduleView = () => {
   const [autoAccepting, setAutoAccepting] = useState(false);
   const pollIntervalRef = useRef(null);
   const autoAcceptHandled = useRef(false);
+  const callHandledRef = useRef(false); // Track if current call was already handled
 
   const fetchData = useCallback(async () => {
     try {
