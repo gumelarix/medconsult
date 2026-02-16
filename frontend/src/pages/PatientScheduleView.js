@@ -220,6 +220,10 @@ const PatientScheduleView = () => {
       
       if (response.data.hasInvitation && response.data.scheduleId === scheduleId) {
         console.log('Found pending invitation via polling:', response.data);
+        
+        // Reset the handled flag for new invitation
+        callHandledRef.current = false;
+        
         setInvitation(response.data);
         
         // Always send notification via service worker (shows action buttons)
