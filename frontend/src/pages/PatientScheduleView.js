@@ -113,33 +113,40 @@ const PatientScheduleView = () => {
   // Listen for service worker messages (notification clicks)
   useEffect(() => {
     const handleServiceWorkerMessage = async (event) => {
-      console.log('[PatientScheduleView] SW message:', event.data);
+      console.log('[PatientScheduleView] SW message received:', event.data);
       
       if (event.data?.type === 'NOTIFICATION_ACTION') {
         const { action, callSessionId } = event.data;
         
+        // Mark call as handled to prevent modal from also handling it
+        callHandledRef.current = true;
+        
         if (action === 'accept' && callSessionId) {
-          // User accepted call from notification - clear modal first to prevent conflicts
-          console.log('[PatientScheduleView] Accepting call from notification:', callSessionId);
-          setInvitation(null); // Clear modal immediately
+          console.log('[PatientScheduleView] *** ACCEPTING call from notification:', callSessionId);
+          
+          // Clear modal and stop sounds immediately
+          setInvitation(null);
           notificationService.stopSound();
           
           try {
-            await axios.post(
+            const response = await axios.post(
               `${API}/patient/call-sessions/${callSessionId}/confirm`,
               {},
               { headers: { Authorization: `Bearer ${token}` } }
             );
+            console.log('[PatientScheduleView] Confirm API response:', response.data);
             toast.success('Call accepted! Joining...');
             navigate(`/call/${callSessionId}`);
           } catch (error) {
-            console.error('Failed to accept call from notification:', error);
+            console.error('[PatientScheduleView] Failed to accept call:', error.response?.data || error);
             toast.error('Failed to join call. It may have expired.');
+            callHandledRef.current = false;
           }
         } else if (action === 'decline' && callSessionId) {
-          // User declined call from notification
-          console.log('[PatientScheduleView] Declining call from notification:', callSessionId);
-          setInvitation(null); // Clear modal immediately
+          console.log('[PatientScheduleView] *** DECLINING call from notification:', callSessionId);
+          
+          // Clear modal and stop sounds immediately
+          setInvitation(null);
           notificationService.stopSound();
           
           try {
@@ -151,8 +158,9 @@ const PatientScheduleView = () => {
             toast.info('Call declined');
             fetchData();
           } catch (error) {
-            console.error('Failed to decline call from notification:', error);
+            console.error('[PatientScheduleView] Failed to decline call:', error);
           }
+          callHandledRef.current = false;
         }
       }
       
@@ -162,6 +170,7 @@ const PatientScheduleView = () => {
         console.log('[PatientScheduleView] Received pending call data:', event.data.data);
         
         if (action === 'accept' && callSessionId) {
+          callHandledRef.current = true;
           setInvitation(null);
           notificationService.stopSound();
           
@@ -176,6 +185,7 @@ const PatientScheduleView = () => {
           } catch (error) {
             console.error('Failed to accept pending call:', error);
             toast.error('Failed to join call. It may have expired.');
+            callHandledRef.current = false;
           }
         }
       }
